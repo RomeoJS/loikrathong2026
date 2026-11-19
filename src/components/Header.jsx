@@ -1,7 +1,9 @@
 import React from 'react';
-import { Award, Users, FileText, Settings, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { Award, Users, FileText, Settings, ShieldCheck, LogOut, User } from 'lucide-react';
 
 export default function Header({
+  currentUser,
+  onLogout,
   activeTab,
   setActiveTab,
   category,
@@ -9,9 +11,11 @@ export default function Header({
   round,
   setRound,
   judge,
-  setJudge,
   judges = []
 }) {
+  const isAdmin = currentUser?.role === 'admin';
+  const isJudge = currentUser?.role === 'judge';
+
   return (
     <header className="bg-slate-900 border-b border-amber-500/30 sticky top-0 z-40 shadow-xl backdrop-blur-md bg-opacity-95">
       {/* Top Banner with University Official Logo */}
@@ -35,7 +39,7 @@ export default function Header({
                 <span className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
                   RMUTK 2569
                 </span>
-                <span className="text-xs text-slate-400">เวทีกลาง สำนักงานอธิการบดี</span>
+                <span className="text-xs text-slate-400">กรรมการตัดสิน ๓ ท่าน (หาร ๓ แต่ละเกณฑ์)</span>
               </div>
               <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-amber-200 via-amber-400 to-amber-100 bg-clip-text text-transparent">
                 ระบบตัดสินคะแนน เทพบุตรและนางนพมาศ ๒๕๖๙
@@ -46,7 +50,7 @@ export default function Header({
             </div>
           </div>
 
-          {/* Quick Round & Category Controls */}
+          {/* User Account Badge & Controls */}
           <div className="flex flex-wrap items-center gap-3">
             {/* Category Selector */}
             <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-700/80 shadow-inner">
@@ -59,7 +63,7 @@ export default function Header({
                 }`}
               >
                 <span>🌸</span>
-                <span>นางนพมาศ (หญิง)</span>
+                <span>นางนพมาศ</span>
               </button>
               <button
                 onClick={() => setCategory('MEN')}
@@ -70,7 +74,7 @@ export default function Header({
                 }`}
               >
                 <span>👑</span>
-                <span>เทพบุตร (ชาย)</span>
+                <span>เทพบุตร</span>
               </button>
             </div>
 
@@ -84,7 +88,7 @@ export default function Header({
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                รอบที่ ๑ (คัดเหลือ ๖)
+                รอบที่ ๑ (คัด ๖)
               </button>
               <button
                 onClick={() => setRound(2)}
@@ -94,7 +98,30 @@ export default function Header({
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                รอบที่ ๒ (ตัดสินชิงชนะเลิศ ๓)
+                รอบที่ ๒ (ตัดสิน ๓)
+              </button>
+            </div>
+
+            {/* User Profile & Logout */}
+            <div className="flex items-center gap-2 bg-slate-950 border border-slate-700/90 pl-3 pr-1 py-1 rounded-xl shadow-inner">
+              <div className="text-right">
+                <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                  {isAdmin ? (
+                    <span className="text-emerald-400 font-semibold">● ผู้ดูแลระบบ (Admin)</span>
+                  ) : (
+                    <span className="text-amber-400 font-semibold">● กรรมการท่านที่ {currentUser?.judge_id}</span>
+                  )}
+                </div>
+                <div className="text-xs font-bold text-white max-w-[130px] truncate">
+                  {currentUser?.name}
+                </div>
+              </div>
+              <button
+                onClick={onLogout}
+                title="ออกจากระบบ"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-900 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -105,6 +132,8 @@ export default function Header({
       <div className="border-t border-slate-800 bg-slate-950/80 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto flex items-center justify-between overflow-x-auto py-2">
           <div className="flex items-center space-x-2">
+            
+            {/* Judge Tab (Accessible by Judge and Admin) */}
             <button
               onClick={() => setActiveTab('judge')}
               className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all ${
@@ -114,21 +143,25 @@ export default function Header({
               }`}
             >
               <ShieldCheck className="w-4 h-4 text-amber-400" />
-              <span>ฝั่งกรรมการตัดสิน (Judge Portal)</span>
+              <span>{isJudge ? 'หน้าลงคะแนนของท่าน' : 'ฝั่งกรรมการตัดสิน (Judge Portal)'}</span>
             </button>
 
-            <button
-              onClick={() => setActiveTab('admin')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all ${
-                activeTab === 'admin'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-              }`}
-            >
-              <Award className="w-4 h-4 text-amber-400" />
-              <span>ฝั่งแอดมิน / คณะกรรมการกลาง (Admin Dashboard)</span>
-            </button>
+            {/* Admin Tabs (Accessible by Admin only, or Print for both) */}
+            {isAdmin && (
+              <button
+                onClick={() => setActiveTab('admin')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all ${
+                  activeTab === 'admin'
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <Award className="w-4 h-4 text-amber-400" />
+                <span>ฝั่งแอดมิน / คะแนนรวม (Admin Dashboard)</span>
+              </button>
+            )}
 
+            {/* Print Tab */}
             <button
               onClick={() => setActiveTab('print')}
               className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all ${
@@ -138,27 +171,30 @@ export default function Header({
               }`}
             >
               <FileText className="w-4 h-4 text-amber-400" />
-              <span>พิมพ์แบบฟอร์มคะแนนทางการ (Official Print)</span>
+              <span>พิมพ์แบบฟอร์มคะแนนเฉลี่ย ๓ ท่าน (Official Print)</span>
             </button>
 
-            <button
-              onClick={() => setActiveTab('management')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all ${
-                activeTab === 'management'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-              }`}
-            >
-              <Settings className="w-4 h-4 text-amber-400" />
-              <span>จัดการข้อมูล (Manage Data)</span>
-            </button>
+            {/* Management Tab (Admin only) */}
+            {isAdmin && (
+              <button
+                onClick={() => setActiveTab('management')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all ${
+                  activeTab === 'management'
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <Settings className="w-4 h-4 text-amber-400" />
+                <span>จัดการข้อมูล & บัญชีกรรมการ (Management)</span>
+              </button>
+            )}
           </div>
 
-          {/* Current Judge Indicator if on Judge tab */}
+          {/* Current Judge Indicator */}
           {activeTab === 'judge' && (
             <div className="flex items-center gap-2 text-xs bg-slate-900 border border-amber-500/30 px-3 py-1.5 rounded-lg">
-              <span className="text-slate-400">ท่านกำลังให้คะแนนในฐานะ:</span>
-              <span className="text-amber-300 font-semibold">{judge ? judge.name : 'ยังไม่เลือกกรรมการ'}</span>
+              <span className="text-slate-400">กรรมการ:</span>
+              <span className="text-amber-300 font-semibold">{judge ? judge.name : 'กำลังโหลด...'}</span>
             </div>
           )}
         </div>

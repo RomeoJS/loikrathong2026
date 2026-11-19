@@ -34,7 +34,57 @@ const upload = multer({ storage: storage });
 // Static assets
 app.use('/images', express.static(path.join(__dirname, '../images')));
 
-// ----------------- API ENDPOINTS -----------------
+// ----------------- AUTHENTICATION API -----------------
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ error: 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน' });
+    }
+    const user = await db.authenticate(username.trim(), password.trim());
+    if (!user) {
+      return res.status(401).json({ error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
+    }
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        username: user.username,
+        name: user.name,
+        role: user.role,
+        judge_id: user.judge_id
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/auth/users', async (req, res) => {
+  try {
+    const users = await db.getUsers();
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/auth/users/:id/password', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ error: 'รหัสผ่านใหม่ต้องไม่ว่างเปล่า' });
+    }
+    await db.updateUserPassword(id, password.trim());
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ----------------- APP API ENDPOINTS -----------------
 
 // Settings
 app.get('/api/settings', async (req, res) => {
@@ -56,7 +106,7 @@ app.post('/api/settings', async (req, res) => {
   }
 });
 
-// Judges
+// Judges (3 judges)
 app.get('/api/judges', async (req, res) => {
   try {
     const judges = await db.getJudges();
@@ -190,7 +240,7 @@ app.post('/api/scores', async (req, res) => {
   }
 });
 
-// Admin Summary Endpoint (Dashboard & Leaderboard)
+// Admin Summary Endpoint (Dashboard & Leaderboard with 3 judges average per criterion)
 app.get('/api/admin/summary', async (req, res) => {
   try {
     const category = req.query.category || 'WOMEN';
@@ -237,12 +287,12 @@ app.post('/api/admin/reset-scores', async (req, res) => {
   }
 });
 
-// Demo seed scores
+// Demo seed scores (Seeds scores for 3 judges)
 app.post('/api/admin/seed-demo-scores', async (req, res) => {
   try {
     const { round, category } = req.body;
     const targetRound = Number(round) || 1;
-    const judges = await db.getJudges();
+    const judges = await db.getJudges(); // 3 judges
     const contestants = await db.getContestants(category, targetRound === 2 ? 2 : undefined);
 
     for (const c of contestants) {
@@ -293,7 +343,7 @@ app.post('/api/admin/seed-demo-scores', async (req, res) => {
       }
     }
 
-    res.json({ success: true, message: 'Seeded demo scores successfully' });
+    res.json({ success: true, message: 'Seeded demo scores for 3 judges successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

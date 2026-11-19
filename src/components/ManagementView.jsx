@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Edit2, Upload, User, Check, X, Shield, RefreshCw } from 'lucide-react';
+import { Settings, Edit2, Upload, User, Check, X, Shield, RefreshCw, KeyRound, Lock } from 'lucide-react';
 
 export default function ManagementView({
   category,
@@ -7,10 +7,16 @@ export default function ManagementView({
   onDataChanged
 }) {
   const [contestants, setContestants] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [editingContestant, setEditingContestant] = useState(null);
   const [editingJudge, setEditingJudge] = useState(null);
   const [uploadingId, setUploadingId] = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+
+  const activeJudges = judges.slice(0, 3);
 
   const fetchContestants = async () => {
     setLoading(true);
@@ -25,11 +31,21 @@ export default function ManagementView({
     }
   };
 
+  const fetchUsers = async () => {
+    try {
+      const res = await fetch('/api/auth/users');
+      const data = await res.json();
+      if (Array.isArray(data)) setUsers(data);
+    } catch (err) {
+      console.error('Failed to load users:', err);
+    }
+  };
+
   useEffect(() => {
     fetchContestants();
+    fetchUsers();
   }, [category]);
 
-  // Handle Photo Upload
   const handlePhotoUpload = async (contestantId, e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -45,7 +61,6 @@ export default function ManagementView({
       });
       const uploadData = await uploadRes.json();
       if (uploadData.url) {
-        // Update contestant record
         await fetch(`/api/contestants/${contestantId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -62,7 +77,6 @@ export default function ManagementView({
     }
   };
 
-  // Handle Save Contestant Info
   const handleSaveContestant = async () => {
     if (!editingContestant) return;
     try {
@@ -85,7 +99,6 @@ export default function ManagementView({
     }
   };
 
-  // Handle Save Judge Info
   const handleSaveJudge = async () => {
     if (!editingJudge) return;
     try {
@@ -99,14 +112,139 @@ export default function ManagementView({
       });
       setEditingJudge(null);
       if (onDataChanged) onDataChanged();
+      await fetchUsers();
     } catch (err) {
       console.error(err);
       alert('บันทึกล้มเหลว');
     }
   };
 
+  const handleUpdatePassword = async () => {
+    if (!editingUser || !newPassword) return;
+    try {
+      const res = await fetch(`/api/auth/users/${editingUser.id}/password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: newPassword })
+      });
+      if (res.ok) {
+        setPasswordSuccess(`เปลี่ยนรหัสผ่านของ ${editingUser.name} เรียบร้อยแล้ว`);
+        setTimeout(() => setPasswordSuccess(''), 3000);
+        setEditingUser(null);
+        setNewPassword('');
+        await fetchUsers();
+      } else {
+        alert('เปลี่ยนรหัสผ่านไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+    }
+  };
+
   return (
     <div className="space-y-8">
+      {/* Toast */}
+      {passwordSuccess && (
+        <div className="fixed bottom-6 right-6 z-50 bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-2 border border-emerald-400">
+          <Check className="w-5 h-5" />
+          <span className="font-medium text-xs">{passwordSuccess}</span>
+        </div>
+      )}
+
+      {/* Account & Password Management (Admin) */}
+      <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-6 shadow-xl">
+        <div className="pb-4 border-b border-slate-800 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <KeyRound className="w-5 h-5 text-amber-400" />
+              <span>จัดการบัญชีผู้ใช้และรหัสผ่าน (Accounts & Passwords)</span>
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              กำหนดรหัสผ่านสำหรับกรรมการทั้ง ๓ ท่าน และผู้ดูแลระบบ (Admin)
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+          {users.map((u) => (
+            <div
+              key={u.id}
+              className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                    u.role === 'admin' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'
+                  }`}>
+                    {u.role === 'admin' ? 'ADMIN' : `JUDGE ${u.judge_id}`}
+                  </span>
+                  <button
+                    onClick={() => { setEditingUser(u); setNewPassword(''); }}
+                    className="p-1 text-slate-400 hover:text-amber-400 rounded hover:bg-slate-900"
+                    title="เปลี่ยนรหัสผ่าน"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="font-bold text-white text-sm mt-2">{u.name}</div>
+                <div className="text-xs text-slate-400 mt-1">
+                  ชื่อผู้ใช้: <code className="text-amber-400 font-mono">{u.username}</code>
+                </div>
+                <div className="text-xs text-slate-400 mt-0.5">
+                  รหัสผ่าน: <code className="text-slate-300 font-mono">{u.password}</code>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-800/80 text-right">
+                <button
+                  onClick={() => { setEditingUser(u); setNewPassword(''); }}
+                  className="w-full py-1.5 px-3 bg-slate-900 hover:bg-slate-800 text-xs font-semibold text-amber-300 rounded-lg border border-slate-800 hover:border-amber-500/40 transition-colors"
+                >
+                  แก้ไขรหัสผ่าน
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Judges Management (3 judges) */}
+      <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-6 shadow-xl">
+        <div className="pb-4 border-b border-slate-800">
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <Shield className="w-5 h-5 text-amber-400" />
+            <span>ข้อมูลกรรมการตัดสิน (๓ ท่าน)</span>
+          </h2>
+          <p className="text-xs text-slate-400">
+            ปรับแต่งชื่อและตำแหน่งของกรรมการทั้ง ๓ ท่าน
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+          {activeJudges.map((j) => (
+            <div
+              key={j.id}
+              className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex items-center justify-between"
+            >
+              <div>
+                <span className="text-[10px] text-amber-400 font-semibold uppercase">
+                  กรรมการท่านที่ {j.id}
+                </span>
+                <div className="font-bold text-white text-sm mt-0.5">{j.name}</div>
+                <div className="text-xs text-slate-400">{j.title}</div>
+              </div>
+              <button
+                onClick={() => setEditingJudge({ ...j })}
+                className="p-2 text-slate-400 hover:text-amber-400 hover:bg-slate-900 rounded-lg border border-slate-800"
+              >
+                <Edit2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Contestants Management */}
       <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-6 shadow-xl">
         <div className="flex items-center justify-between pb-4 border-b border-slate-800">
@@ -186,41 +324,51 @@ export default function ManagementView({
         </div>
       </div>
 
-      {/* Judges Management */}
-      <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-6 shadow-xl">
-        <div className="pb-4 border-b border-slate-800">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <Shield className="w-5 h-5 text-amber-400" />
-            <span>จัดการข้อมูลคณะกรรมการตัดสิน (Judges)</span>
-          </h2>
-          <p className="text-xs text-slate-400">
-            ปรับแต่งชื่อและตำแหน่งของกรรมการทั้ง ๖ ท่านให้ตรงตามรายนามจริง
-          </p>
-        </div>
+      {/* ================= EDIT PASSWORD MODAL ================= */}
+      {editingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+          <div className="bg-slate-900 border border-amber-500/40 rounded-2xl max-w-sm w-full p-6 shadow-2xl">
+            <h3 className="text-base font-bold text-white mb-2">
+              เปลี่ยนรหัสผ่าน: {editingUser.name}
+            </h3>
+            <p className="text-xs text-slate-400 mb-4">
+              ชื่อผู้ใช้: <code className="text-amber-300 font-mono">{editingUser.username}</code>
+            </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-6">
-          {judges.map((j) => (
-            <div
-              key={j.id}
-              className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex items-center justify-between"
-            >
+            <div className="space-y-3 text-xs">
               <div>
-                <span className="text-[10px] text-amber-400 font-semibold uppercase">
-                  กรรมการท่านที่ {j.id}
-                </span>
-                <div className="font-bold text-white text-sm mt-0.5">{j.name}</div>
-                <div className="text-xs text-slate-400">{j.title}</div>
+                <label className="block text-slate-300 mb-1">รหัสผ่านใหม่</label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="กรอกรหัสผ่านใหม่"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 pl-9 pr-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
               </div>
+            </div>
+
+            <div className="pt-4 mt-4 border-t border-slate-800 flex justify-end gap-2">
               <button
-                onClick={() => setEditingJudge({ ...j })}
-                className="p-2 text-slate-400 hover:text-amber-400 hover:bg-slate-900 rounded-lg border border-slate-800"
+                onClick={() => setEditingUser(null)}
+                className="px-4 py-2 rounded-xl text-slate-300 hover:bg-slate-800 text-xs"
               >
-                <Edit2 className="w-4 h-4" />
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleUpdatePassword}
+                disabled={!newPassword}
+                className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs disabled:opacity-50"
+              >
+                บันทึกรหัสผ่าน
               </button>
             </div>
-          ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ================= EDIT CONTESTANT MODAL ================= */}
       {editingContestant && (

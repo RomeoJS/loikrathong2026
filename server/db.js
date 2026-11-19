@@ -8,6 +8,21 @@ let dbType = 'sqlite';
 let mysqlPool = null;
 let sqliteDb = null;
 
+// Initial 3 judges
+const initialJudges = [
+  { id: 1, name: 'กรรมการตัดสินท่านที่ ๑', title: 'กรรมการผู้ทรงคุณวุฒิ' },
+  { id: 2, name: 'กรรมการตัดสินท่านที่ ๒', title: 'กรรมการผู้ทรงคุณวุฒิ' },
+  { id: 3, name: 'กรรมการตัดสินท่านที่ ๓', title: 'กรรมการผู้ทรงคุณวุฒิ' }
+];
+
+// Initial users for authentication
+const initialUsers = [
+  { username: 'admin', password: 'admin123', name: 'ผู้ดูแลระบบ (Admin)', role: 'admin', judge_id: null },
+  { username: 'judge1', password: '1234', name: 'กรรมการตัดสินท่านที่ ๑', role: 'judge', judge_id: 1 },
+  { username: 'judge2', password: '1234', name: 'กรรมการตัดสินท่านที่ ๒', role: 'judge', judge_id: 2 },
+  { username: 'judge3', password: '1234', name: 'กรรมการตัดสินท่านที่ ๓', role: 'judge', judge_id: 3 }
+];
+
 // Initial contestant seed data
 const initialWomenList = [
   { num: 1, prefix: 'น.ส.', first: 'ชวิศา', last: 'วิศิษฐ์เสวีวัฒน์', school: 'มหาวิทยาลัยสวนดุสิต', img: '/images/women/MS01.jpg' },
@@ -49,7 +64,6 @@ async function initDatabase() {
   const mysqlPass = process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : '123456';
   const mysqlDatabase = process.env.DB_NAME || 'loikrathong2026';
 
-  // 1. Try connecting to MySQL with a short timeout
   let canConnectMySQL = false;
   try {
     const testConn = await Promise.race([
@@ -63,7 +77,6 @@ async function initDatabase() {
       new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timeout')), 2500))
     ]);
 
-    // Check / create database
     await testConn.query(`CREATE DATABASE IF NOT EXISTS \`${mysqlDatabase}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
     await testConn.end();
 
@@ -87,7 +100,6 @@ async function initDatabase() {
     canConnectMySQL = false;
   }
 
-  // 2. Setup SQLite fallback if MySQL is unreachable
   if (!canConnectMySQL) {
     dbType = 'sqlite';
     const { DatabaseSync } = require('node:sqlite');
@@ -97,12 +109,12 @@ async function initDatabase() {
     console.log(`[DB] SQLite database initialized at ${dbPath}`);
   }
 
-  // 3. Create tables & Seed data for whichever database is active
   await setupSchema();
 }
 
 async function setupSchema() {
   if (dbType === 'mysql') {
+    // 1. Tables
     await mysqlPool.query(`
       CREATE TABLE IF NOT EXISTS settings (
         \`key\` VARCHAR(100) PRIMARY KEY,
@@ -114,6 +126,16 @@ async function setupSchema() {
         name VARCHAR(255) NOT NULL,
         title VARCHAR(255) NOT NULL DEFAULT 'กรรมการผู้ทรงคุณวุฒิ',
         is_active TINYINT NOT NULL DEFAULT 1
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+      CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        username VARCHAR(50) UNIQUE NOT NULL,
+        password VARCHAR(100) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        role ENUM('admin', 'judge') NOT NULL,
+        judge_id INT DEFAULT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
       CREATE TABLE IF NOT EXISTS contestants (
@@ -164,14 +186,24 @@ async function setupSchema() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // Seed judges
-    const [judges] = await mysqlPool.query('SELECT COUNT(*) as count FROM judges');
-    if (judges[0].count === 0) {
-      for (let i = 1; i <= 6; i++) {
-        await mysqlPool.query('INSERT INTO judges (id, name, title) VALUES (?, ?, ?)', [
-          i, `กรรมการตัดสินท่านที่ ${i}`, 'กรรมการผู้ทรงคุณวุฒิ'
-        ]);
-      }
+    // Ensure only 3 judges exist
+    await mysqlPool.query('DELETE FROM scores WHERE judge_id > 3');
+    await mysqlPool.query('DELETE FROM judges WHERE id > 3');
+
+    for (const j of initialJudges) {
+      await mysqlPool.query(
+        'INSERT INTO judges (id, name, title) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), title = VALUES(title)',
+        [j.id, j.name, j.title]
+      );
+    }
+
+    // Seed users
+    for (const u of initialUsers) {
+      await mysqlPool.query(`
+        INSERT INTO users (username, password, name, role, judge_id) 
+        VALUES (?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE name = VALUES(name), role = VALUES(role), judge_id = VALUES(judge_id)
+      `, [u.username, u.password, u.name, u.role, u.judge_id]);
     }
 
     // Seed contestants
@@ -210,6 +242,16 @@ async function setupSchema() {
         name TEXT NOT NULL,
         title TEXT NOT NULL DEFAULT 'กรรมการผู้ทรงคุณวุฒิ',
         is_active INTEGER NOT NULL DEFAULT 1
+      );
+
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        name TEXT NOT NULL,
+        role TEXT NOT NULL CHECK(role IN ('admin', 'judge')),
+        judge_id INTEGER DEFAULT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE TABLE IF NOT EXISTS contestants (
@@ -260,13 +302,25 @@ async function setupSchema() {
       );
     `);
 
-    // Seed judges
-    const countJudges = sqliteDb.prepare('SELECT COUNT(*) as count FROM judges').get().count;
-    if (countJudges === 0) {
-      const insertJudge = sqliteDb.prepare('INSERT INTO judges (id, name, title) VALUES (?, ?, ?)');
-      for (let i = 1; i <= 6; i++) {
-        insertJudge.run(i, `กรรมการตัดสินท่านที่ ${i}`, 'กรรมการผู้ทรงคุณวุฒิ');
-      }
+    // Ensure 3 judges in SQLite
+    sqliteDb.exec('DELETE FROM scores WHERE judge_id > 3;');
+    sqliteDb.exec('DELETE FROM judges WHERE id > 3;');
+
+    const insertJudge = sqliteDb.prepare(`
+      INSERT INTO judges (id, name, title) VALUES (?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET name = excluded.name, title = excluded.title
+    `);
+    for (const j of initialJudges) {
+      insertJudge.run(j.id, j.name, j.title);
+    }
+
+    // Seed users in SQLite
+    const insertUser = sqliteDb.prepare(`
+      INSERT INTO users (username, password, name, role, judge_id) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(username) DO UPDATE SET name = excluded.name, role = excluded.role, judge_id = excluded.judge_id
+    `);
+    for (const u of initialUsers) {
+      insertUser.run(u.username, u.password, u.name, u.role, u.judge_id);
     }
 
     // Seed contestants
@@ -294,7 +348,41 @@ async function setupSchema() {
   }
 }
 
-// ----------------- UNIFIED API METHODS -----------------
+// ----------------- AUTHENTICATION METHODS -----------------
+
+async function authenticate(username, password) {
+  if (dbType === 'mysql') {
+    const [rows] = await mysqlPool.query(
+      'SELECT id, username, name, role, judge_id FROM users WHERE username = ? AND password = ?',
+      [username, password]
+    );
+    return rows[0] || null;
+  } else {
+    const row = sqliteDb.prepare(
+      'SELECT id, username, name, role, judge_id FROM users WHERE username = ? AND password = ?'
+    ).get(username, password);
+    return row || null;
+  }
+}
+
+async function getUsers() {
+  if (dbType === 'mysql') {
+    const [rows] = await mysqlPool.query('SELECT id, username, password, name, role, judge_id FROM users ORDER BY id ASC');
+    return rows;
+  } else {
+    return sqliteDb.prepare('SELECT id, username, password, name, role, judge_id FROM users ORDER BY id ASC').all();
+  }
+}
+
+async function updateUserPassword(id, newPassword) {
+  if (dbType === 'mysql') {
+    await mysqlPool.query('UPDATE users SET password = ? WHERE id = ?', [newPassword, id]);
+  } else {
+    sqliteDb.prepare('UPDATE users SET password = ? WHERE id = ?').run(newPassword, id);
+  }
+}
+
+// ----------------- DATA QUERY & UPDATE METHODS -----------------
 
 async function getSettings() {
   if (dbType === 'mysql') {
@@ -326,10 +414,11 @@ async function saveSetting(key, value) {
 
 async function getJudges() {
   if (dbType === 'mysql') {
-    const [judges] = await mysqlPool.query('SELECT * FROM judges ORDER BY id ASC');
+    const [judges] = await mysqlPool.query('SELECT * FROM judges WHERE id <= 3 ORDER BY id ASC');
     const [stats] = await mysqlPool.query(`
       SELECT judge_id, round, COUNT(*) as scored_count 
       FROM scores 
+      WHERE judge_id <= 3
       GROUP BY judge_id, round
     `);
     return judges.map(j => {
@@ -338,10 +427,11 @@ async function getJudges() {
       return { ...j, scored_r1: r1, scored_r2: r2 };
     });
   } else {
-    const judges = sqliteDb.prepare('SELECT * FROM judges ORDER BY id ASC').all();
+    const judges = sqliteDb.prepare('SELECT * FROM judges WHERE id <= 3 ORDER BY id ASC').all();
     const stats = sqliteDb.prepare(`
       SELECT judge_id, round, COUNT(*) as scored_count 
       FROM scores 
+      WHERE judge_id <= 3
       GROUP BY judge_id, round
     `).all();
     return judges.map(j => {
@@ -355,8 +445,10 @@ async function getJudges() {
 async function updateJudge(id, name, title) {
   if (dbType === 'mysql') {
     await mysqlPool.query('UPDATE judges SET name = ?, title = ? WHERE id = ?', [name, title || 'กรรมการผู้ทรงคุณวุฒิ', id]);
+    await mysqlPool.query('UPDATE users SET name = ? WHERE judge_id = ?', [name, id]);
   } else {
     sqliteDb.prepare('UPDATE judges SET name = ?, title = ? WHERE id = ?').run(name, title || 'กรรมการผู้ทรงคุณวุฒิ', id);
+    sqliteDb.prepare('UPDATE users SET name = ? WHERE judge_id = ?').run(name, id);
   }
 }
 
@@ -573,8 +665,10 @@ async function saveScore(judgeId, contestantId, round, scores, total, comment) {
   }
 }
 
+// ----------------- SCORING CALCULATION (3 JUDGES AVERAGE PER CRITERION) -----------------
+
 async function getAdminSummary(category, round) {
-  const judges = await getJudges();
+  const judges = await getJudges(); // 3 judges
   const contestants = await getContestants(category, round);
 
   let scores = [];
@@ -583,7 +677,7 @@ async function getAdminSummary(category, round) {
       SELECT s.*, j.name as judge_name 
       FROM scores s
       JOIN judges j ON s.judge_id = j.id
-      WHERE s.round = ?
+      WHERE s.round = ? AND s.judge_id <= 3
     `, [round]);
     scores = rows;
   } else {
@@ -591,7 +685,7 @@ async function getAdminSummary(category, round) {
       SELECT s.*, j.name as judge_name 
       FROM scores s
       JOIN judges j ON s.judge_id = j.id
-      WHERE s.round = ?
+      WHERE s.round = ? AND s.judge_id <= 3
     `).all(round);
   }
 
@@ -607,8 +701,7 @@ async function getAdminSummary(category, round) {
   const summaries = contestants.map(c => {
     const cScores = scoreMap.get(c.id) || [];
     const judgeScoresObj = {};
-    let sum = 0;
-    let dressSum = 0;
+    let sumTotal = 0;
 
     for (const j of judges) {
       const found = cScores.find(s => s.judge_id === j.id);
@@ -618,38 +711,78 @@ async function getAdminSummary(category, round) {
           total: tot,
           details: found
         };
-        sum += tot;
-        if (round === 1) {
-          dressSum += (Number(found.c_dress_accuracy) + Number(found.c_hair) + Number(found.c_shoes));
-        }
+        sumTotal += tot;
       } else {
         judgeScoresObj[j.id] = null;
       }
     }
 
-    const count = cScores.length;
-    const average = count > 0 ? Math.round((sum / count) * 100) / 100 : 0;
-    const overallAverage = Math.round((sum / (judges.length || 1)) * 100) / 100;
+    const scoredCount = cScores.length;
+    // Calculate average for each individual criterion across the 3 judges (ผลรวมของแต่ละช่องหาร 3)
+    // Divisor: 3 if calculating official 3-judge average, or scoredCount during intermediate judging
+    const divisor = 3;
+
+    let criteriaAverages = {};
+    let calculatedTotalFromCriteria = 0;
+
+    if (round === 1) {
+      const keys = [
+        'c_dress_accuracy', 'c_hair', 'c_shoes',
+        'c_walk', 'c_stand', 'c_elegance', 'c_voice',
+        'c_face_symmetry', 'c_wai'
+      ];
+      for (const k of keys) {
+        let sumK = 0;
+        for (const s of cScores) {
+          sumK += Number(s[k] || 0);
+        }
+        // Average for this specific slot across the 3 judges
+        const avgK = scoredCount > 0 ? Math.round((sumK / divisor) * 100) / 100 : 0;
+        criteriaAverages[k] = avgK;
+        calculatedTotalFromCriteria += avgK;
+      }
+    } else {
+      // Round 2
+      const keys = [
+        'c_r2_walk', 'c_r2_stand', 'c_r2_wai',
+        'c_r2_situation', 'c_r2_knowledge', 'c_r2_relevance'
+      ];
+      for (const k of keys) {
+        let sumK = 0;
+        for (const s of cScores) {
+          sumK += Number(s[k] || 0);
+        }
+        const avgK = scoredCount > 0 ? Math.round((sumK / divisor) * 100) / 100 : 0;
+        criteriaAverages[k] = avgK;
+        calculatedTotalFromCriteria += avgK;
+      }
+    }
+
+    calculatedTotalFromCriteria = Math.round(calculatedTotalFromCriteria * 100) / 100;
+    const averageTotal = scoredCount > 0 ? Math.round((sumTotal / divisor) * 100) / 100 : 0;
 
     return {
       ...c,
       judge_scores: judgeScoresObj,
-      scored_judges_count: count,
-      total_judges_count: judges.length,
-      total_sum: Math.round(sum * 100) / 100,
-      average_score: average,
-      overall_average: overallAverage,
-      dress_total: Math.round(dressSum * 100) / 100,
+      scored_judges_count: scoredCount,
+      total_judges_count: 3,
+      criteria_averages: criteriaAverages,
+      total_sum: Math.round(sumTotal * 100) / 100,
+      average_score: calculatedTotalFromCriteria, // Result of summing all averaged criteria slots!
+      dress_total: round === 1 
+        ? Math.round(((criteriaAverages.c_dress_accuracy || 0) + (criteriaAverages.c_hair || 0) + (criteriaAverages.c_shoes || 0)) * 100) / 100 
+        : 0
     };
   });
 
-  const sorted = [...summaries].sort((a, b) => b.total_sum - a.total_sum);
+  // Rank candidates by average_score descending
+  const sorted = [...summaries].sort((a, b) => b.average_score - a.average_score);
   let rank = 1;
   for (let i = 0; i < sorted.length; i++) {
-    if (i > 0 && sorted[i].total_sum < sorted[i - 1].total_sum) {
+    if (i > 0 && sorted[i].average_score < sorted[i - 1].average_score) {
       rank = i + 1;
     }
-    sorted[i].rank = sorted[i].total_sum > 0 ? rank : '-';
+    sorted[i].rank = sorted[i].average_score > 0 ? rank : '-';
   }
 
   return {
@@ -666,9 +799,9 @@ async function qualifyRound1(category, contestantIds) {
   if (!qualifiedIds || qualifiedIds.length === 0) {
     if (dbType === 'mysql') {
       const [top6] = await mysqlPool.query(`
-        SELECT c.id, COALESCE(SUM(s.total_score), 0) as total
+        SELECT c.id, COALESCE(SUM(s.total_score), 0) / 3 as total
         FROM contestants c
-        LEFT JOIN scores s ON c.id = s.contestant_id AND s.round = 1
+        LEFT JOIN scores s ON c.id = s.contestant_id AND s.round = 1 AND s.judge_id <= 3
         WHERE c.category = ?
         GROUP BY c.id
         ORDER BY total DESC, c.number ASC
@@ -677,9 +810,9 @@ async function qualifyRound1(category, contestantIds) {
       qualifiedIds = top6.map(t => t.id);
     } else {
       const top6 = sqliteDb.prepare(`
-        SELECT c.id, COALESCE(SUM(s.total_score), 0) as total
+        SELECT c.id, COALESCE(SUM(s.total_score), 0) / 3.0 as total
         FROM contestants c
-        LEFT JOIN scores s ON c.id = s.contestant_id AND s.round = 1
+        LEFT JOIN scores s ON c.id = s.contestant_id AND s.round = 1 AND s.judge_id <= 3
         WHERE c.category = ?
         GROUP BY c.id
         ORDER BY total DESC, c.number ASC
@@ -785,6 +918,9 @@ async function getContestantCategory(contestantId) {
 
 module.exports = {
   initDatabase,
+  authenticate,
+  getUsers,
+  updateUserPassword,
   getSettings,
   saveSetting,
   getJudges,

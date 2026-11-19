@@ -10,11 +10,12 @@ import {
   TrendingUp, 
   Eye, 
   X, 
-  HelpCircle,
   Medal,
   ChevronRight,
   Sliders,
-  Crown
+  Crown,
+  LayoutGrid,
+  Table
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -26,8 +27,8 @@ export default function AdminDashboard({
 }) {
   const [summaryData, setSummaryData] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [viewMode, setViewMode] = useState('table'); // 'table' or 'cards'
-  const [selectedScoreDetail, setSelectedScoreDetail] = useState(null); // judge breakdown modal
+  const [viewMode, setViewMode] = useState('judges'); // 'judges' | 'criteria'
+  const [selectedScoreDetail, setSelectedScoreDetail] = useState(null);
   const [showQualifyModal, setShowQualifyModal] = useState(false);
   const [selectedQualifyIds, setSelectedQualifyIds] = useState([]);
   const [showAwardModal, setShowAwardModal] = useState(false);
@@ -47,17 +48,14 @@ export default function AdminDashboard({
       const data = await res.json();
       setSummaryData(data);
 
-      // Pre-populate qualification selections
       if (data && data.contestants) {
         const qualified = data.contestants.filter(c => c.round1_qualified === 1).map(c => c.id);
         if (qualified.length > 0) {
           setSelectedQualifyIds(qualified);
         } else {
-          // Default to top 6
           setSelectedQualifyIds(data.contestants.slice(0, 6).map(c => c.id));
         }
 
-        // Pre-populate awards form for round 2
         const w = data.contestants.find(c => c.round2_rank === 1)?.id || data.contestants[0]?.id || '';
         const r1 = data.contestants.find(c => c.round2_rank === 2)?.id || data.contestants[1]?.id || '';
         const r2 = data.contestants.find(c => c.round2_rank === 3)?.id || data.contestants[2]?.id || '';
@@ -83,7 +81,6 @@ export default function AdminDashboard({
     fetchSummary();
   }, [category, round]);
 
-  // Handle Qualifying Top 6 for Round 2
   const handleConfirmQualify = async () => {
     setActionLoading(true);
     try {
@@ -98,11 +95,7 @@ export default function AdminDashboard({
       const result = await res.json();
       if (result.success) {
         setShowQualifyModal(false);
-        confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 }
-        });
+        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
         await fetchSummary();
         if (onDataChanged) onDataChanged();
       }
@@ -114,7 +107,6 @@ export default function AdminDashboard({
     }
   };
 
-  // Handle Finalizing Round 2 Awards
   const handleFinalizeAwards = async () => {
     setActionLoading(true);
     try {
@@ -129,12 +121,7 @@ export default function AdminDashboard({
       const result = await res.json();
       if (result.success) {
         setShowAwardModal(false);
-        // Big celebration confetti
-        confetti({
-          particleCount: 150,
-          spread: 100,
-          origin: { y: 0.5 }
-        });
+        confetti({ particleCount: 150, spread: 100, origin: { y: 0.5 } });
         await fetchSummary();
         if (onDataChanged) onDataChanged();
       }
@@ -146,9 +133,8 @@ export default function AdminDashboard({
     }
   };
 
-  // Seed Demo Scores
   const handleSeedDemo = async () => {
-    if (!window.confirm(`คุณต้องการจำลองคะแนนตัวอย่างสำหรับ ${category === 'WOMEN' ? 'นางนพมาศ' : 'เทพบุตร'} รอบที่ ${round} หรือไม่?`)) return;
+    if (!window.confirm(`คุณต้องการจำลองคะแนนตัวอย่างของกรรมการ ๓ ท่านสำหรับ ${category === 'WOMEN' ? 'นางนพมาศ' : 'เทพบุตร'} รอบที่ ${round} หรือไม่?`)) return;
     setActionLoading(true);
     try {
       const res = await fetch('/api/admin/seed-demo-scores', {
@@ -168,7 +154,6 @@ export default function AdminDashboard({
     }
   };
 
-  // Reset Scores
   const handleResetScores = async () => {
     if (!window.confirm(`⚠️ คำเตือน: คุณต้องการล้างคะแนนทั้งหมดของ ${category === 'WOMEN' ? 'นางนพมาศ' : 'เทพบุตร'} ในรอบที่ ${round} ใช่หรือไม่?`)) return;
     setActionLoading(true);
@@ -194,13 +179,14 @@ export default function AdminDashboard({
     return (
       <div className="flex items-center justify-center py-20">
         <RefreshCw className="w-8 h-8 text-amber-400 animate-spin" />
-        <span className="ml-3 text-slate-300">กำลังประมวลผลคะแนนและจัดอันดับ...</span>
+        <span className="ml-3 text-slate-300">กำลังประมวลผลคะแนนเฉลี่ย ๓ ท่าน...</span>
       </div>
     );
   }
 
   const contestants = summaryData?.contestants || [];
-  const judges = summaryData?.judges || [];
+  const judges = (summaryData?.judges || []).slice(0, 3);
+  const isWomen = category === 'WOMEN';
 
   return (
     <div className="space-y-6">
@@ -222,6 +208,9 @@ export default function AdminDashboard({
                 ตารางสรุปคะแนนและจัดอันดับ รอบที่ {round === 1 ? '๑ (คัดเหลือ ๖ คน)' : '๒ (ชิงชนะเลิศ)'}
               </span>
             </h2>
+            <p className="text-xs text-amber-200/80 mt-1">
+              * เกณฑ์การคำนวณ: รวมคะแนนของกรรมการทั้ง ๓ ท่านในแต่ละช่องเกณฑ์แล้วหาร ๓
+            </p>
           </div>
 
           {/* Action Buttons */}
@@ -247,11 +236,11 @@ export default function AdminDashboard({
             <button
               onClick={handleSeedDemo}
               disabled={actionLoading}
-              title="สุ่มกรอกคะแนนสมจริงของกรรมการทุกคนเพื่อทดสอบระบบ"
+              title="สุ่มกรอกคะแนนสมจริงของกรรมการ ๓ ท่านเพื่อทดสอบระบบ"
               className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition-colors"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>จำลองคะแนนตัวอย่าง</span>
+              <span>จำลองคะแนน (๓ กรรมการ)</span>
             </button>
 
             <button
@@ -267,7 +256,7 @@ export default function AdminDashboard({
               onClick={fetchSummary}
               disabled={loading}
               className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
-              title="รีเฟรชคราฟท์คะแนนล่าสุด"
+              title="รีเฟรชคะแนนล่าสุด"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
@@ -282,10 +271,10 @@ export default function AdminDashboard({
           </div>
           <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
             <div className="text-[11px] text-slate-400">กรรมการตัดสิน</div>
-            <div className="text-xl font-bold text-amber-400 mt-0.5">{judges.length} ท่าน</div>
+            <div className="text-xl font-bold text-amber-400 mt-0.5">๓ ท่าน</div>
           </div>
           <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-            <div className="text-[11px] text-slate-400">ผู้มีคะแนนสูงสุดชั่วคราว</div>
+            <div className="text-[11px] text-slate-400">อันดับ ๑ ปัจจุบัน (คะแนนเฉลี่ย)</div>
             <div className="text-sm font-bold text-emerald-400 mt-1 truncate">
               {contestants[0] ? `#${contestants[0].number} ${contestants[0].first_name} (${contestants[0].average_score} คะแนน)` : '-'}
             </div>
@@ -311,192 +300,291 @@ export default function AdminDashboard({
           <div className="flex items-center gap-2">
             <Medal className="w-5 h-5 text-amber-400" />
             <h3 className="font-bold text-white text-base">
-              ตารางคะแนนแจกแจงรายกรรมการ (คลิกที่ช่องคะแนนกรรมการเพื่อดูเกณฑ์ย่อย)
+              ตารางสรุปคะแนนกรรมการ ๓ ท่าน & คะแนนเฉลี่ยแต่ละช่อง
             </h3>
           </div>
-          <div className="text-xs text-slate-400">
-            * เรียงลำดับตามคะแนนรวม / คะแนนเฉลี่ยจากสูงสุดไปต่ำสุด
+
+          {/* Toggle View Mode */}
+          <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
+            <button
+              onClick={() => setViewMode('judges')}
+              className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                viewMode === 'judges' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              แสดงคะแนนรายกรรมการ (ก.๑, ก.๒, ก.๓)
+            </button>
+            <button
+              onClick={() => setViewMode('criteria')}
+              className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                viewMode === 'criteria' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              แสดงเกณฑ์เฉลี่ยแต่ละช่อง (หาร ๓)
+            </button>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr className="bg-slate-950/90 text-slate-300 border-b border-slate-800 text-xs">
-                <th className="py-3.5 px-3 font-semibold text-center w-12">อันดับ</th>
-                <th className="py-3.5 px-3 font-semibold text-center w-16">หมายเลข</th>
-                <th className="py-3.5 px-3 font-semibold">ผู้เข้าประกวด</th>
-                <th className="py-3.5 px-3 font-semibold">สถานศึกษา</th>
-                {judges.map((j) => (
-                  <th key={j.id} className="py-3.5 px-2 font-semibold text-center">
-                    <div className="text-[11px] text-amber-300 truncate max-w-[85px] mx-auto">
-                      {j.name.replace('กรรมการตัดสินท่านที่', 'ก.')}
-                    </div>
+        {/* MODE 1: JUDGES VIEW */}
+        {viewMode === 'judges' && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr className="bg-slate-950/90 text-slate-300 border-b border-slate-800 text-xs">
+                  <th className="py-3.5 px-3 font-semibold text-center w-12">อันดับ</th>
+                  <th className="py-3.5 px-3 font-semibold text-center w-16">หมายเลข</th>
+                  <th className="py-3.5 px-3 font-semibold">ผู้เข้าประกวด</th>
+                  <th className="py-3.5 px-3 font-semibold">สถานศึกษา</th>
+                  {judges.map((j) => (
+                    <th key={j.id} className="py-3.5 px-2 font-semibold text-center w-28">
+                      <div className="text-xs text-amber-300 truncate">
+                        {j.name}
+                      </div>
+                    </th>
+                  ))}
+                  <th className="py-3.5 px-3 font-bold text-amber-400 text-center bg-slate-900/60 w-28">
+                    คะแนนรวม (๓ ท่าน)
                   </th>
-                ))}
-                <th className="py-3.5 px-3 font-bold text-amber-400 text-center bg-slate-900/60">
-                  คะแนนรวม
-                </th>
-                <th className="py-3.5 px-3 font-bold text-emerald-400 text-center bg-slate-900/60">
-                  เฉลี่ย
-                </th>
-                <th className="py-3.5 px-3 font-semibold text-center">สถานะ / รางวัล</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/80">
-              {contestants.map((c, index) => {
-                const isTop6 = index < 6;
-                const isQualified = c.round1_qualified === 1;
-                const rank1 = c.round2_rank === 1;
-                const rank2 = c.round2_rank === 2;
-                const rank3 = c.round2_rank === 3;
+                  <th className="py-3.5 px-3 font-bold text-emerald-400 text-center bg-slate-900/60 w-28">
+                    คะแนนเฉลี่ย (หาร ๓)
+                  </th>
+                  <th className="py-3.5 px-3 font-semibold text-center">สถานะ / รางวัล</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/80">
+                {contestants.map((c, index) => {
+                  const isTop6 = index < 6;
+                  const isQualified = c.round1_qualified === 1;
+                  const rank1 = c.round2_rank === 1;
+                  const rank2 = c.round2_rank === 2;
+                  const rank3 = c.round2_rank === 3;
 
-                return (
-                  <tr
-                    key={c.id}
-                    className={`hover:bg-slate-800/40 transition-colors ${
-                      round === 1 && isQualified
-                        ? 'bg-amber-500/5'
-                        : rank1
-                        ? 'bg-amber-400/10 font-medium'
-                        : ''
-                    }`}
-                  >
-                    {/* Rank */}
-                    <td className="py-3 px-3 text-center">
-                      {c.rank === 1 ? (
-                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-400 text-slate-950 font-black text-xs shadow-md">
-                          1
-                        </span>
-                      ) : c.rank === 2 ? (
-                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-300 text-slate-950 font-black text-xs shadow-md">
-                          2
-                        </span>
-                      ) : c.rank === 3 ? (
-                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-700 text-white font-black text-xs shadow-md">
-                          3
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 font-semibold">{c.rank}</span>
-                      )}
-                    </td>
+                  return (
+                    <tr
+                      key={c.id}
+                      className={`hover:bg-slate-800/40 transition-colors ${
+                        round === 1 && isQualified
+                          ? 'bg-amber-500/5'
+                          : rank1
+                          ? 'bg-amber-400/10 font-medium'
+                          : ''
+                      }`}
+                    >
+                      {/* Rank */}
+                      <td className="py-3 px-3 text-center">
+                        {c.rank === 1 ? (
+                          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-400 text-slate-950 font-black text-xs shadow-md">
+                            1
+                          </span>
+                        ) : c.rank === 2 ? (
+                          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-300 text-slate-950 font-black text-xs shadow-md">
+                            2
+                          </span>
+                        ) : c.rank === 3 ? (
+                          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-700 text-white font-black text-xs shadow-md">
+                            3
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-semibold">{c.rank}</span>
+                        )}
+                      </td>
 
-                    {/* Number */}
-                    <td className="py-3 px-3 text-center">
-                      <span className="font-mono font-bold text-amber-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-700">
-                        #{String(c.number).padStart(2, '0')}
-                      </span>
-                    </td>
+                      {/* Number */}
+                      <td className="py-3 px-3 text-center">
+                        <span className="font-mono font-bold text-amber-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-700">
+                          #{String(c.number).padStart(2, '0')}
+                        </span>
+                      </td>
 
-                    {/* Photo & Name */}
-                    <td className="py-3 px-3">
-                      <div className="flex items-center space-x-3">
-                        <img
-                          src={c.image_url || '/images/placeholder.svg'}
-                          alt=""
-                          className="w-10 h-10 rounded-xl object-cover object-top border border-slate-700"
-                          onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src = '/images/placeholder.svg';
-                          }}
-                        />
-                        <div>
-                          <div className="font-semibold text-white">
-                            {c.prefix}{c.first_name} {c.last_name}
+                      {/* Photo & Name */}
+                      <td className="py-3 px-3">
+                        <div className="flex items-center space-x-3">
+                          <img
+                            src={c.image_url || '/images/placeholder.svg'}
+                            alt=""
+                            className="w-10 h-10 rounded-xl object-cover object-top border border-slate-700"
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = '/images/placeholder.svg';
+                            }}
+                          />
+                          <div>
+                            <div className="font-semibold text-white">
+                              {c.prefix}{c.first_name} {c.last_name}
+                            </div>
+                            {round === 1 && isQualified && (
+                              <span className="inline-block mt-0.5 text-[10px] text-amber-300 font-medium bg-amber-500/20 px-1.5 py-0.2 rounded border border-amber-500/30">
+                                ผ่านเข้ารอบ ๒
+                              </span>
+                            )}
                           </div>
-                          {round === 1 && isQualified && (
-                            <span className="inline-block mt-0.5 text-[10px] text-amber-300 font-medium bg-amber-500/20 px-1.5 py-0.2 rounded border border-amber-500/30">
-                              ผ่านเข้ารอบ ๒
+                        </div>
+                      </td>
+
+                      {/* School */}
+                      <td className="py-3 px-3 text-xs text-slate-300 max-w-[160px] truncate">
+                        {c.school}
+                      </td>
+
+                      {/* 3 Judges Columns */}
+                      {judges.map((j) => {
+                        const scoreData = c.judge_scores[j.id];
+                        return (
+                          <td key={j.id} className="py-3 px-2 text-center">
+                            {scoreData ? (
+                              <button
+                                onClick={() => setSelectedScoreDetail({
+                                  contestant: c,
+                                  judge: j,
+                                  score: scoreData.details
+                                })}
+                                className="group px-2.5 py-1 rounded bg-slate-800/80 hover:bg-amber-500 hover:text-slate-950 text-slate-200 text-xs font-semibold border border-slate-700/60 hover:border-amber-400 transition-all shadow-sm"
+                                title="คลิกเพื่อดูเกณฑ์ย่อยของกรรมการท่านนี้"
+                              >
+                                <span>{scoreData.total}</span>
+                              </button>
+                            ) : (
+                              <span className="text-slate-600 text-xs">รอลงคะแนน</span>
+                            )}
+                          </td>
+                        );
+                      })}
+
+                      {/* Total Sum */}
+                      <td className="py-3 px-3 text-center bg-slate-950/40">
+                        <span className="font-black text-amber-300 text-sm">
+                          {c.total_sum}
+                        </span>
+                      </td>
+
+                      {/* Average Score (Divided by 3) */}
+                      <td className="py-3 px-3 text-center bg-slate-950/40">
+                        <span className="font-black text-emerald-400 text-base">
+                          {c.average_score}
+                        </span>
+                      </td>
+
+                      {/* Badges / Awards */}
+                      <td className="py-3 px-3 text-center">
+                        <div className="flex flex-wrap items-center justify-center gap-1">
+                          {rank1 && (
+                            <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-amber-400 text-slate-950 border border-amber-300 flex items-center gap-1 shadow">
+                              👑 ชนะเลิศ
+                            </span>
+                          )}
+                          {rank2 && (
+                            <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-300 text-slate-950 border border-slate-200">
+                              🥈 รองอันดับ ๑
+                            </span>
+                          )}
+                          {rank3 && (
+                            <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-amber-700 text-white border border-amber-600">
+                              🥉 รองอันดับ ๒
+                            </span>
+                          )}
+                          {c.award_costume === 1 && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                              แต่งกายงาม
+                            </span>
+                          )}
+                          {c.award_popular === 1 && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                              ขวัญใจ มทร.กรุงเทพ
+                            </span>
+                          )}
+                          {round === 1 && !isQualified && isTop6 && (
+                            <span className="px-2 py-0.5 text-[10px] text-slate-400 border border-slate-700 rounded">
+                              Top 6
                             </span>
                           )}
                         </div>
-                      </div>
-                    </td>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-                    {/* School */}
-                    <td className="py-3 px-3 text-xs text-slate-300 max-w-[160px] truncate">
-                      {c.school}
-                    </td>
-
-                    {/* Judges Columns */}
-                    {judges.map((j) => {
-                      const scoreData = c.judge_scores[j.id];
-                      return (
-                        <td key={j.id} className="py-3 px-2 text-center">
-                          {scoreData ? (
-                            <button
-                              onClick={() => setSelectedScoreDetail({
-                                contestant: c,
-                                judge: j,
-                                score: scoreData.details
-                              })}
-                              className="group px-2 py-1 rounded bg-slate-800/80 hover:bg-amber-500 hover:text-slate-950 text-slate-200 text-xs font-semibold border border-slate-700/60 hover:border-amber-400 transition-all shadow-sm"
-                              title="คลิกเพื่อดูเกณฑ์ย่อย"
-                            >
-                              <span>{scoreData.total}</span>
-                            </button>
-                          ) : (
-                            <span className="text-slate-600 text-xs">-</span>
-                          )}
-                        </td>
-                      );
-                    })}
-
-                    {/* Total Sum */}
-                    <td className="py-3 px-3 text-center bg-slate-950/40">
-                      <span className="font-black text-amber-300 text-sm">
-                        {c.total_sum}
-                      </span>
-                    </td>
-
-                    {/* Average Score */}
-                    <td className="py-3 px-3 text-center bg-slate-950/40">
-                      <span className="font-black text-emerald-400 text-sm">
+        {/* MODE 2: CRITERIA BREAKDOWN VIEW (EACH CHANNEL AVERAGED BY 3) */}
+        {viewMode === 'criteria' && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-center border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-950/90 text-slate-300 border-b border-slate-800">
+                  <th className="py-3 px-2 w-10">อันดับ</th>
+                  <th className="py-3 px-2 w-12">หมายเลข</th>
+                  <th className="py-3 px-3 text-left">ผู้เข้าประกวด</th>
+                  {round === 1 ? (
+                    <>
+                      <th className="py-3 px-2 text-amber-300">ชุด ({isWomen ? 15 : 20})</th>
+                      <th className="py-3 px-2 text-amber-300">ผม ({isWomen ? 10 : 5})</th>
+                      <th className="py-3 px-2 text-amber-300">รองเท้า (5)</th>
+                      <th className="py-3 px-2 text-amber-300">เดิน (5)</th>
+                      <th className="py-3 px-2 text-amber-300">ยืน (5)</th>
+                      <th className="py-3 px-2 text-amber-300">สง่างาม (15)</th>
+                      <th className="py-3 px-2 text-amber-300">น้ำเสียง (5)</th>
+                      <th className="py-3 px-2 text-amber-300">ใบหน้า (30)</th>
+                      <th className="py-3 px-2 text-amber-300">ไหว้ (10)</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="py-3 px-2 text-amber-300">เดิน (10)</th>
+                      <th className="py-3 px-2 text-amber-300">ยืน (10)</th>
+                      <th className="py-3 px-2 text-amber-300">ไหว้ (10)</th>
+                      <th className="py-3 px-2 text-amber-300">สถานการณ์ (20)</th>
+                      <th className="py-3 px-2 text-amber-300">มีความรู้ (30)</th>
+                      <th className="py-3 px-2 text-amber-300">ตรงประเด็น (20)</th>
+                    </>
+                  )}
+                  <th className="py-3 px-3 font-bold text-emerald-400 bg-slate-950/60">
+                    รวมคะแนนเฉลี่ย (๑๐๐)
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/80">
+                {contestants.map((c) => {
+                  const ca = c.criteria_averages || {};
+                  return (
+                    <tr key={c.id} className="hover:bg-slate-800/40">
+                      <td className="py-2.5 px-2 font-semibold text-slate-300">{c.rank}</td>
+                      <td className="py-2.5 px-2 font-mono font-bold text-amber-400">#{c.number}</td>
+                      <td className="py-2.5 px-3 text-left font-medium text-white truncate max-w-[150px]">
+                        {c.prefix}{c.first_name} {c.last_name}
+                      </td>
+                      {round === 1 ? (
+                        <>
+                          <td className="py-2.5 px-2">{ca.c_dress_accuracy ?? '-'}</td>
+                          <td className="py-2.5 px-2">{ca.c_hair ?? '-'}</td>
+                          <td className="py-2.5 px-2">{ca.c_shoes ?? '-'}</td>
+                          <td className="py-2.5 px-2">{ca.c_walk ?? '-'}</td>
+                          <td className="py-2.5 px-2">{ca.c_stand ?? '-'}</td>
+                          <td className="py-2.5 px-2">{ca.c_elegance ?? '-'}</td>
+                          <td className="py-2.5 px-2">{ca.c_voice ?? '-'}</td>
+                          <td className="py-2.5 px-2">{ca.c_face_symmetry ?? '-'}</td>
+                          <td className="py-2.5 px-2">{ca.c_wai ?? '-'}</td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="py-2.5 px-2">{ca.c_r2_walk ?? '-'}</td>
+                          <td className="py-2.5 px-2">{ca.c_r2_stand ?? '-'}</td>
+                          <td className="py-2.5 px-2">{ca.c_r2_wai ?? '-'}</td>
+                          <td className="py-2.5 px-2">{ca.c_r2_situation ?? '-'}</td>
+                          <td className="py-2.5 px-2">{ca.c_r2_knowledge ?? '-'}</td>
+                          <td className="py-2.5 px-2">{ca.c_r2_relevance ?? '-'}</td>
+                        </>
+                      )}
+                      <td className="py-2.5 px-3 font-bold text-emerald-400 bg-slate-950/60 text-sm">
                         {c.average_score}
-                      </span>
-                    </td>
-
-                    {/* Badges / Awards */}
-                    <td className="py-3 px-3 text-center">
-                      <div className="flex flex-wrap items-center justify-center gap-1">
-                        {rank1 && (
-                          <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-amber-400 text-slate-950 border border-amber-300 flex items-center gap-1 shadow">
-                            👑 ชนะเลิศ
-                          </span>
-                        )}
-                        {rank2 && (
-                          <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-300 text-slate-950 border border-slate-200">
-                            🥈 รองอันดับ ๑
-                          </span>
-                        )}
-                        {rank3 && (
-                          <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-amber-700 text-white border border-amber-600">
-                            🥉 รองอันดับ ๒
-                          </span>
-                        )}
-                        {c.award_costume === 1 && (
-                          <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-500/20 text-purple-300 border border-purple-500/40">
-                            แต่งกายงาม
-                          </span>
-                        )}
-                        {c.award_popular === 1 && (
-                          <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">
-                            ขวัญใจ มทร.กรุงเทพ
-                          </span>
-                        )}
-                        {round === 1 && !isQualified && isTop6 && (
-                          <span className="px-2 py-0.5 text-[10px] text-slate-400 border border-slate-700 rounded">
-                            ติด Top 6
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* ================= MODAL: DETAILED CRITERIA BREAKDOWN ================= */}
@@ -652,7 +740,7 @@ export default function AdminDashboard({
                   <span>คัดเลือก ๖ คนสุดท้ายเพื่อเข้าสู่รอบที่ ๒</span>
                 </h3>
                 <p className="text-xs text-slate-400">
-                  ระบบได้เลือก Top 6 ที่ได้คะแนนสูงสุดให้อัตโนมัติ (สามารถติ๊กปรับเปลี่ยนได้หากคะแนนเท่ากัน)
+                  ระบบได้เลือก Top 6 ที่ได้คะแนนเฉลี่ยสูงสุดให้อัตโนมัติ (สามารถปรับเปลี่ยนได้หากคะแนนเท่ากัน)
                 </p>
               </div>
               <button
@@ -664,7 +752,7 @@ export default function AdminDashboard({
             </div>
 
             <div className="py-4 space-y-2 max-h-[55vh] overflow-y-auto">
-              {contestants.map((c, i) => {
+              {contestants.map((c) => {
                 const isSelected = selectedQualifyIds.includes(c.id);
                 return (
                   <label
@@ -700,8 +788,8 @@ export default function AdminDashboard({
                     </div>
 
                     <div className="text-right">
-                      <div className="text-xs font-bold text-amber-300">{c.total_sum} คะแนน</div>
-                      <div className="text-[10px] text-emerald-400">เฉลี่ย {c.average_score}</div>
+                      <div className="text-sm font-bold text-amber-300">เฉลี่ย {c.average_score}</div>
+                      <div className="text-[10px] text-slate-400">รวม ๓ ท่าน: {c.total_sum}</div>
                     </div>
                   </label>
                 );
@@ -758,7 +846,6 @@ export default function AdminDashboard({
             </div>
 
             <div className="py-4 space-y-4 max-h-[60vh] overflow-y-auto text-xs">
-              {/* Winner */}
               <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl">
                 <label className="block font-bold text-amber-300 mb-1">
                   👑 รางวัลชนะเลิศ ({category === 'WOMEN' ? 'นางนพมาศ' : 'เทพบุตร'})
@@ -771,13 +858,12 @@ export default function AdminDashboard({
                   <option value="">-- เลือกลำดับ --</option>
                   {contestants.map(c => (
                     <option key={c.id} value={c.id}>
-                      #{c.number} {c.prefix}{c.first_name} {c.last_name} (คะแนน: {c.total_sum})
+                      #{c.number} {c.prefix}{c.first_name} {c.last_name} (คะแนนเฉลี่ย: {c.average_score})
                     </option>
                   ))}
                 </select>
               </div>
 
-              {/* Runner Up 1 */}
               <div className="bg-slate-950/80 border border-slate-800 p-3 rounded-xl">
                 <label className="block font-bold text-slate-200 mb-1">
                   🥈 รางวัลรองชนะเลิศ อันดับ ๑
@@ -790,13 +876,12 @@ export default function AdminDashboard({
                   <option value="">-- เลือกลำดับ --</option>
                   {contestants.map(c => (
                     <option key={c.id} value={c.id}>
-                      #{c.number} {c.prefix}{c.first_name} {c.last_name} (คะแนน: {c.total_sum})
+                      #{c.number} {c.prefix}{c.first_name} {c.last_name} (คะแนนเฉลี่ย: {c.average_score})
                     </option>
                   ))}
                 </select>
               </div>
 
-              {/* Runner Up 2 */}
               <div className="bg-slate-950/80 border border-slate-800 p-3 rounded-xl">
                 <label className="block font-bold text-slate-200 mb-1">
                   🥉 รางวัลรองชนะเลิศ อันดับ ๒
@@ -809,13 +894,12 @@ export default function AdminDashboard({
                   <option value="">-- เลือกลำดับ --</option>
                   {contestants.map(c => (
                     <option key={c.id} value={c.id}>
-                      #{c.number} {c.prefix}{c.first_name} {c.last_name} (คะแนน: {c.total_sum})
+                      #{c.number} {c.prefix}{c.first_name} {c.last_name} (คะแนนเฉลี่ย: {c.average_score})
                     </option>
                   ))}
                 </select>
               </div>
 
-              {/* Costume Award */}
               <div className="bg-slate-950/80 border border-slate-800 p-3 rounded-xl">
                 <label className="block font-bold text-purple-300 mb-1">
                   ✨ รางวัลแต่งกายงาม ราชมงคลกรุงเทพ
@@ -834,7 +918,6 @@ export default function AdminDashboard({
                 </select>
               </div>
 
-              {/* Popular Award */}
               <div className="bg-slate-950/80 border border-slate-800 p-3 rounded-xl">
                 <label className="block font-bold text-rose-300 mb-1">
                   💖 รางวัลขวัญใจราชมงคลกรุงเทพ

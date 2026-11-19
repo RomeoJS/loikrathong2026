@@ -10,13 +10,13 @@ import {
   Sparkles, 
   Sliders, 
   ArrowRight, 
-  Info,
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
 import { getCriteria, calculateTotalScore } from '../utils/criteria';
 
 export default function JudgeView({
+  currentUser,
   category,
   round,
   judge,
@@ -32,6 +32,8 @@ export default function JudgeView({
   const [saving, setSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
+  const isAdmin = currentUser?.role === 'admin';
+
   // Fetch contestants whenever category, round, or judge changes
   const fetchContestants = async () => {
     if (!judge) return;
@@ -42,6 +44,7 @@ export default function JudgeView({
       setContestants(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load contestants:', err);
+      setContestants([]);
     } finally {
       setLoading(false);
     }
@@ -86,7 +89,7 @@ export default function JudgeView({
         const init = {};
         for (const g of criteriaGroups) {
           for (const item of g.items) {
-            init[item.key] = Math.round(item.max * 0.8); // default to 80% for convenience
+            init[item.key] = Math.round(item.max * 0.8);
           }
         }
         setScores(init);
@@ -127,12 +130,10 @@ export default function JudgeView({
         setToastMessage(`บันทึกคะแนนหมายเลข ${activeContestant.number} เรียบร้อยแล้ว (${result.total_score} คะแนน)`);
         setTimeout(() => setToastMessage(''), 3000);
         
-        // Refresh local contestants
         await fetchContestants();
         if (onScoreUpdated) onScoreUpdated();
 
         if (andNext) {
-          // Find next contestant
           const currentIndex = contestants.findIndex(c => c.id === activeContestant.id);
           if (currentIndex !== -1 && currentIndex + 1 < contestants.length) {
             handleOpenScore(contestants[currentIndex + 1]);
@@ -174,30 +175,34 @@ export default function JudgeView({
           <div>
             <h2 className="text-lg font-semibold text-amber-200 flex items-center gap-2">
               <UserCheck className="w-5 h-5 text-amber-400" />
-              <span>เลือกกรรมการตัดสิน</span>
+              <span>กรรมการตัดสิน (๓ ท่าน)</span>
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              คลิกเลือกชื่อท่านเพื่อเริ่มหรือทำการลงคะแนนในแต่ละรอบ
+              {isAdmin ? 'ในฐานะแอดมิน คุณสามารถสลับเพื่อดูหรือช่วยเหลือการให้คะแนนของกรรมการแต่ละท่านได้' : `ท่านกำลังลงคะแนนในฐานะ: ${judge?.name}`}
             </p>
           </div>
 
-          {/* Judges Switcher Buttons */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 w-full md:w-auto">
-            {judges.map(j => {
+          {/* Judges Switcher Buttons (Admin can switch, Judge is locked to their account) */}
+          <div className="grid grid-cols-3 gap-2 w-full md:w-auto">
+            {judges.slice(0, 3).map(j => {
               const isSelected = judge?.id === j.id;
+              const disabled = !isAdmin && currentUser?.judge_id !== j.id;
               return (
                 <button
                   key={j.id}
+                  disabled={disabled}
                   onClick={() => setJudge(j)}
-                  className={`px-3 py-2.5 rounded-xl text-xs font-medium border text-center transition-all ${
+                  className={`px-4 py-2.5 rounded-xl text-xs font-medium border text-center transition-all ${
                     isSelected
                       ? 'bg-gradient-to-b from-amber-400 to-amber-600 text-slate-950 border-amber-300 font-bold shadow-lg shadow-amber-500/20 scale-105'
+                      : disabled
+                      ? 'bg-slate-950/40 text-slate-600 border-slate-900 cursor-not-allowed opacity-50'
                       : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:border-amber-400/50 hover:bg-slate-800'
                   }`}
                 >
-                  <div className="truncate">{j.name}</div>
-                  <div className={`text-[10px] mt-0.5 ${isSelected ? 'text-slate-900' : 'text-slate-400'}`}>
-                    {round === 1 ? `รอบ ๑: ${j.scored_r1 || 0}` : `รอบ ๒: ${j.scored_r2 || 0}`}
+                  <div className="truncate font-semibold">{j.name}</div>
+                  <div className={`text-[10px] mt-0.5 ${isSelected ? 'text-slate-900 font-bold' : 'text-slate-400'}`}>
+                    {round === 1 ? `รอบ ๑: ${j.scored_r1 || 0}/15` : `รอบ ๒: ${j.scored_r2 || 0}/6`}
                   </div>
                 </button>
               );
@@ -237,16 +242,14 @@ export default function JudgeView({
             </span>
           </h3>
           <p className="text-xs text-slate-400 mt-1">
-            {round === 1 
-              ? 'เกณฑ์คะแนนเต็ม ๑๐๐ คะแนน (การแต่งกาย ๓๐, บุคลิกภาพ ๓๐, ความงาม/กิริยา ๔๐)' 
-              : 'เกณฑ์คะแนนเต็ม ๑๐๐ คะแนน (รูปร่าง/บุคลิกภาพ ๓๐, ปฏิภาณไหวพริบ ๒๐, ตอบคำถามตรงประเด็น ๕๐)'}
+            * เกณฑ์คะแนนช่องต่างๆ จะนำผลรวมของกรรมการทั้ง ๓ ท่าน มารวมแล้วหาร ๓ เพื่อเป็นคะแนนตัดสินรอบชิงชนะเลิศ
           </p>
         </div>
 
         {round === 2 && contestants.length === 0 && (
           <div className="bg-amber-500/20 border border-amber-500/40 text-amber-200 px-4 py-2 rounded-xl text-sm flex items-center gap-2">
             <AlertCircle className="w-4 h-4" />
-            <span>ยังไม่มีผู้ผ่านเข้ารอบ ๒ (กรุณาให้แอดมินกดยืนยันคัดเลือก ๖ คนจากรอบที่ ๑)</span>
+            <span>ยังไม่มีผู้ผ่านเข้ารอบ ๒ (รอแอดมินยืนยันผลการคัดเลือก ๖ คน)</span>
           </div>
         )}
       </div>
@@ -365,7 +368,7 @@ export default function JudgeView({
               {/* Total Score Real-time Display */}
               <div className="flex items-center gap-4">
                 <div className="text-right">
-                  <div className="text-[10px] uppercase tracking-wider text-slate-400">คะแนนรวม</div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400">คะแนนของท่าน</div>
                   <div className="text-2xl sm:text-3xl font-black bg-gradient-to-r from-amber-300 to-amber-500 bg-clip-text text-transparent">
                     {currentTotal}
                     <span className="text-xs text-slate-400 font-normal"> / 100</span>
@@ -439,7 +442,7 @@ export default function JudgeView({
                             <span className="text-xs text-amber-400 font-bold">{item.max}</span>
                           </div>
 
-                          {/* Preset percentage buttons for quick scoring */}
+                          {/* Preset percentage buttons */}
                           <div className="flex justify-end gap-1.5 pt-1">
                             {[0.6, 0.7, 0.8, 0.9, 1.0].map((ratio) => {
                               const scorePreset = Math.round(item.max * ratio * 10) / 10;

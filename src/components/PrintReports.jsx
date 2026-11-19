@@ -7,7 +7,6 @@ export default function PrintReports({
   judges = []
 }) {
   const [reportType, setReportType] = useState('r1_sheet'); // 'r1_sheet' | 'r2_sheet' | 'award_sheet'
-  const [selectedJudgeId, setSelectedJudgeId] = useState('all'); // 'all' (Master Average) or 1..6
   const [contestants, setContestants] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -35,6 +34,7 @@ export default function PrintReports({
 
   const isWomen = category === 'WOMEN';
   const categoryTitle = isWomen ? 'นางนพมาศ' : 'เทพบุตร';
+  const activeJudges = judges.slice(0, 3);
 
   // Awards finder
   const winner = contestants.find(c => c.round2_rank === 1);
@@ -50,10 +50,10 @@ export default function PrintReports({
         <div>
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <Printer className="w-5 h-5 text-amber-400" />
-            <span>พิมพ์เอกสารและรายงานทางการ (Official Document Print)</span>
+            <span>พิมพ์เอกสารและรายงานทางการ (ผลรวมกรรมการ ๓ ท่านหาร ๓)</span>
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            แบบฟอร์มเอกสารได้รับการจัดทำตามรูปแบบทางการของมหาวิทยาลัยเทคโนโลยีราชมงคลกรุงเทพ ๒๕๖๙
+            แบบฟอร์มเอกสารได้รับการจัดทำตามรูปแบบทางการ มทร.กรุงเทพ (กรรมการตัดสิน ๓ ท่าน)
           </p>
         </div>
 
@@ -116,7 +116,7 @@ export default function PrintReports({
                 รายชื่อผู้เข้าประกวด{categoryTitle} ราชมงคลกรุงเทพ ประจำปี ๒๕๖๙
               </h3>
               <p className="text-sm font-semibold text-slate-800">
-                รอบแรก วันที่ ๒๔ พฤศจิกายน ๒๕๖๙
+                รอบแรก วันที่ ๒๔ พฤศจิกายน ๒๕๖๙ (คะแนนเฉลี่ยจากกรรมการ ๓ ท่าน)
               </p>
               <p className="text-xs text-slate-700">
                 ณ เวทีกลางสำนักงานอธิการบดี มหาวิทยาลัยเทคโนโลยีราชมงคลกรุงเทพ
@@ -129,10 +129,10 @@ export default function PrintReports({
                   <th rowSpan={2} className="border border-slate-900 p-1 w-10">ลำดับ</th>
                   <th rowSpan={2} className="border border-slate-900 p-1 w-44">ชื่อ-สกุล</th>
                   <th rowSpan={2} className="border border-slate-900 p-1 w-36">สถานศึกษา</th>
-                  <th colSpan={3} className="border border-slate-900 p-1">การแต่งกาย</th>
-                  <th colSpan={4} className="border border-slate-900 p-1">บุคลิกภาพ</th>
-                  <th colSpan={2} className="border border-slate-900 p-1">ความงามของใบหน้า/กิริยา</th>
-                  <th rowSpan={2} className="border border-slate-900 p-1 w-14">รวมคะแนน ๑๐๐</th>
+                  <th colSpan={3} className="border border-slate-900 p-1">การแต่งกาย (เฉลี่ย)</th>
+                  <th colSpan={4} className="border border-slate-900 p-1">บุคลิกภาพ (เฉลี่ย)</th>
+                  <th colSpan={2} className="border border-slate-900 p-1">ความงามของใบหน้า/กิริยา (เฉลี่ย)</th>
+                  <th rowSpan={2} className="border border-slate-900 p-1 w-16 bg-slate-200">รวมคะแนน ๑๐๐</th>
                 </tr>
                 <tr className="bg-slate-50 text-[10px]">
                   <th className="border border-slate-900 p-0.5">ชุด {isWomen ? 15 : 20}</th>
@@ -148,6 +148,7 @@ export default function PrintReports({
               </thead>
               <tbody>
                 {contestants.map((c) => {
+                  const ca = c.criteria_averages || {};
                   return (
                     <tr key={c.id} className="hover:bg-slate-50">
                       <td className="border border-slate-900 p-1 font-semibold">{c.number}</td>
@@ -157,17 +158,17 @@ export default function PrintReports({
                       <td className="border border-slate-900 p-1 text-left text-[11px] truncate">
                         {c.school}
                       </td>
-                      {/* Criteria scores */}
-                      <td className="border border-slate-900 p-1 text-[11px]"></td>
-                      <td className="border border-slate-900 p-1 text-[11px]"></td>
-                      <td className="border border-slate-900 p-1 text-[11px]"></td>
-                      <td className="border border-slate-900 p-1 text-[11px]"></td>
-                      <td className="border border-slate-900 p-1 text-[11px]"></td>
-                      <td className="border border-slate-900 p-1 text-[11px]"></td>
-                      <td className="border border-slate-900 p-1 text-[11px]"></td>
-                      <td className="border border-slate-900 p-1 text-[11px]"></td>
-                      <td className="border border-slate-900 p-1 text-[11px]"></td>
-                      <td className="border border-slate-900 p-1 font-bold text-center">
+                      {/* Averaged Criteria slots (ผลรวมกรรมการ 3 ท่านหาร 3) */}
+                      <td className="border border-slate-900 p-1 text-[11px]">{ca.c_dress_accuracy > 0 ? ca.c_dress_accuracy : ''}</td>
+                      <td className="border border-slate-900 p-1 text-[11px]">{ca.c_hair > 0 ? ca.c_hair : ''}</td>
+                      <td className="border border-slate-900 p-1 text-[11px]">{ca.c_shoes > 0 ? ca.c_shoes : ''}</td>
+                      <td className="border border-slate-900 p-1 text-[11px]">{ca.c_walk > 0 ? ca.c_walk : ''}</td>
+                      <td className="border border-slate-900 p-1 text-[11px]">{ca.c_stand > 0 ? ca.c_stand : ''}</td>
+                      <td className="border border-slate-900 p-1 text-[11px]">{ca.c_elegance > 0 ? ca.c_elegance : ''}</td>
+                      <td className="border border-slate-900 p-1 text-[11px]">{ca.c_voice > 0 ? ca.c_voice : ''}</td>
+                      <td className="border border-slate-900 p-1 text-[11px]">{ca.c_face_symmetry > 0 ? ca.c_face_symmetry : ''}</td>
+                      <td className="border border-slate-900 p-1 text-[11px]">{ca.c_wai > 0 ? ca.c_wai : ''}</td>
+                      <td className="border border-slate-900 p-1 font-bold text-center bg-slate-50">
                         {c.average_score > 0 ? c.average_score : ''}
                       </td>
                     </tr>
@@ -176,17 +177,16 @@ export default function PrintReports({
               </tbody>
             </table>
 
-            {/* Signature Area */}
-            <div className="mt-8 pt-4">
-              <div className="grid grid-cols-2 gap-8 text-center text-xs">
-                <div className="space-y-1">
-                  <p>.........................................................................................</p>
-                  <p>กรรมการตัดสิน</p>
-                </div>
-                <div className="space-y-1">
-                  <p>.........................................................................................</p>
-                  <p>กรรมการตัดสิน</p>
-                </div>
+            {/* 3 Judges Signature Lines */}
+            <div className="mt-10 pt-4">
+              <div className="grid grid-cols-3 gap-6 text-center text-xs">
+                {activeJudges.map((j) => (
+                  <div key={j.id} className="space-y-1">
+                    <p>.......................................................................</p>
+                    <p className="font-semibold text-slate-800">{j.name}</p>
+                    <p className="text-[10px] text-slate-600">{j.title || 'กรรมการตัดสิน'}</p>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -200,7 +200,7 @@ export default function PrintReports({
                 รายชื่อผู้เข้าประกวด{categoryTitle} ราชมงคลกรุงเทพ ประจำปี ๒๕๖๙
               </h3>
               <p className="text-sm font-semibold text-slate-800">
-                รอบสอง วันที่ ๒๔ พฤศจิกายน ๒๕๖๙
+                รอบสอง วันที่ ๒๔ พฤศจิกายน ๒๕๖๙ (คะแนนเฉลี่ยจากกรรมการ ๓ ท่าน)
               </p>
               <p className="text-xs text-slate-700">
                 ณ เวทีกลางสำนักงานอธิการบดี มหาวิทยาลัยเทคโนโลยีราชมงคลกรุงเทพ
@@ -213,10 +213,10 @@ export default function PrintReports({
                   <th rowSpan={2} className="border border-slate-900 p-1 w-10">ลำดับ</th>
                   <th rowSpan={2} className="border border-slate-900 p-1 w-44">ชื่อ-สกุล</th>
                   <th rowSpan={2} className="border border-slate-900 p-1 w-36">สถานศึกษา</th>
-                  <th colSpan={3} className="border border-slate-900 p-1">รูปร่าง/บุคลิกภาพ</th>
-                  <th className="border border-slate-900 p-1">ปฏิภาณไหวพริบในการตอบคำถาม</th>
-                  <th colSpan={2} className="border border-slate-900 p-1">ตอบคำถามตรงประเด็น</th>
-                  <th rowSpan={2} className="border border-slate-900 p-1 w-16">รวมคะแนน ๑๐๐</th>
+                  <th colSpan={3} className="border border-slate-900 p-1">รูปร่าง/บุคลิกภาพ (เฉลี่ย)</th>
+                  <th className="border border-slate-900 p-1">ปฏิภาณไหวพริบ (เฉลี่ย)</th>
+                  <th colSpan={2} className="border border-slate-900 p-1">ตอบคำถามตรงประเด็น (เฉลี่ย)</th>
+                  <th rowSpan={2} className="border border-slate-900 p-1 w-16 bg-slate-200">รวมคะแนน ๑๐๐</th>
                 </tr>
                 <tr className="bg-slate-50 text-[10px]">
                   <th className="border border-slate-900 p-0.5">เดิน 10</th>
@@ -231,40 +231,42 @@ export default function PrintReports({
                 {(contestants.filter(c => c.round1_qualified === 1).length > 0
                   ? contestants.filter(c => c.round1_qualified === 1)
                   : contestants.slice(0, 6)
-                ).map((c, idx) => (
-                  <tr key={c.id} className="hover:bg-slate-50">
-                    <td className="border border-slate-900 p-2 font-semibold">{idx + 1}</td>
-                    <td className="border border-slate-900 p-2 text-left font-medium">
-                      {c.prefix}{c.first_name} {c.last_name}
-                    </td>
-                    <td className="border border-slate-900 p-2 text-left text-[11px]">
-                      {c.school}
-                    </td>
-                    <td className="border border-slate-900 p-2"></td>
-                    <td className="border border-slate-900 p-2"></td>
-                    <td className="border border-slate-900 p-2"></td>
-                    <td className="border border-slate-900 p-2"></td>
-                    <td className="border border-slate-900 p-2"></td>
-                    <td className="border border-slate-900 p-2"></td>
-                    <td className="border border-slate-900 p-2 font-bold text-center">
-                      {c.average_score > 0 ? c.average_score : ''}
-                    </td>
-                  </tr>
-                ))}
+                ).map((c, idx) => {
+                  const ca = c.criteria_averages || {};
+                  return (
+                    <tr key={c.id} className="hover:bg-slate-50">
+                      <td className="border border-slate-900 p-2 font-semibold">{idx + 1}</td>
+                      <td className="border border-slate-900 p-2 text-left font-medium">
+                        {c.prefix}{c.first_name} {c.last_name}
+                      </td>
+                      <td className="border border-slate-900 p-2 text-left text-[11px]">
+                        {c.school}
+                      </td>
+                      <td className="border border-slate-900 p-2">{ca.c_r2_walk > 0 ? ca.c_r2_walk : ''}</td>
+                      <td className="border border-slate-900 p-2">{ca.c_r2_stand > 0 ? ca.c_r2_stand : ''}</td>
+                      <td className="border border-slate-900 p-2">{ca.c_r2_wai > 0 ? ca.c_r2_wai : ''}</td>
+                      <td className="border border-slate-900 p-2">{ca.c_r2_situation > 0 ? ca.c_r2_situation : ''}</td>
+                      <td className="border border-slate-900 p-2">{ca.c_r2_knowledge > 0 ? ca.c_r2_knowledge : ''}</td>
+                      <td className="border border-slate-900 p-2">{ca.c_r2_relevance > 0 ? ca.c_r2_relevance : ''}</td>
+                      <td className="border border-slate-900 p-2 font-bold text-center bg-slate-50">
+                        {c.average_score > 0 ? c.average_score : ''}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
 
-            {/* Signature Area */}
-            <div className="mt-8 pt-4">
-              <div className="grid grid-cols-2 gap-8 text-center text-xs">
-                <div className="space-y-1">
-                  <p>.........................................................................................</p>
-                  <p>กรรมการตัดสิน</p>
-                </div>
-                <div className="space-y-1">
-                  <p>.........................................................................................</p>
-                  <p>กรรมการตัดสิน</p>
-                </div>
+            {/* 3 Judges Signature Lines */}
+            <div className="mt-10 pt-4">
+              <div className="grid grid-cols-3 gap-6 text-center text-xs">
+                {activeJudges.map((j) => (
+                  <div key={j.id} className="space-y-1">
+                    <p>.......................................................................</p>
+                    <p className="font-semibold text-slate-800">{j.name}</p>
+                    <p className="text-[10px] text-slate-600">{j.title || 'กรรมการตัดสิน'}</p>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -278,7 +280,7 @@ export default function PrintReports({
                 ผลการตัดสินประกวด{categoryTitle} ราชมงคลกรุงเทพ ประจำปี ๒๕๖๙
               </h3>
               <p className="text-sm font-semibold text-slate-800">
-                วันที่ ๒๔ พฤศจิกายน ๒๕๖๙
+                วันที่ ๒๔ พฤศจิกายน ๒๕๖๙ (ตัดสินโดยคณะกรรมการ ๓ ท่าน)
               </p>
               <p className="text-xs text-slate-700">
                 ณ มหาวิทยาลัยเทคโนโลยีราชมงคลกรุงเทพ
@@ -345,13 +347,13 @@ export default function PrintReports({
               </tbody>
             </table>
 
-            {/* 6 Judges Signature Lines */}
-            <div className="mt-10 pt-4">
-              <div className="grid grid-cols-2 gap-y-10 gap-x-6 text-center text-xs">
-                {judges.map((j) => (
+            {/* 3 Judges Signature Lines */}
+            <div className="mt-12 pt-6">
+              <div className="grid grid-cols-3 gap-6 text-center text-xs">
+                {activeJudges.map((j) => (
                   <div key={j.id} className="space-y-1">
-                    <p>(...................................................................................)</p>
-                    <p className="font-medium text-slate-800">{j.name}</p>
+                    <p>(.......................................................................)</p>
+                    <p className="font-semibold text-slate-800">{j.name}</p>
                     <p className="text-[10px] text-slate-600">{j.title || 'กรรมการตัดสิน'}</p>
                   </div>
                 ))}
