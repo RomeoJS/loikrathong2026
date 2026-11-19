@@ -18,12 +18,16 @@ export default function App() {
     try {
       const res = await fetch('/api/judges');
       const data = await res.json();
-      setJudges(data);
-      if (!activeJudge && data.length > 0) {
-        setActiveJudge(data[0]);
-      } else if (activeJudge) {
-        const updated = data.find(j => j.id === activeJudge.id);
-        if (updated) setActiveJudge(updated);
+      if (Array.isArray(data)) {
+        setJudges(data);
+        if (!activeJudge && data.length > 0) {
+          setActiveJudge(data[0]);
+        } else if (activeJudge) {
+          const updated = data.find(j => j.id === activeJudge.id);
+          if (updated) setActiveJudge(updated);
+        }
+      } else {
+        console.warn('API returned non-array judges:', data);
       }
     } catch (err) {
       console.error('Failed to load judges:', err);
@@ -35,8 +39,10 @@ export default function App() {
     try {
       const res = await fetch('/api/settings');
       const data = await res.json();
-      if (data.active_round) setRound(Number(data.active_round));
-      if (data.active_category) setCategory(data.active_category);
+      if (data && typeof data === 'object') {
+        if (data.active_round) setRound(Number(data.active_round));
+        if (data.active_category) setCategory(data.active_category);
+      }
     } catch (err) {
       console.error('Failed to load settings:', err);
     }
@@ -126,7 +132,7 @@ export default function App() {
             การประกวดเทพบุตรและนางนพมาศ ราชมงคลกรุงเทพ ประจำปี ๒๕๖๙ | ณ เวทีกลางสำนักงานอธิการบดี มหาวิทยาลัยเทคโนโลยีราชมงคลกรุงเทพ
           </p>
           <p className="mt-1 text-slate-600">
-            ระบบตัดสินคะแนนดิจิทัล &bull; พัฒนาโดย DeepMind AI Assistant &bull; จัดเก็บฐานข้อมูล SQLite แบบเรียลไทม์
+            ระบบตัดสินคะแนนดิจิทัล &bull; พัฒนาโดย DeepMind AI Assistant &bull; พร้อมฐานข้อมูล MySQL/HeidiSQL & SQLite Cloud Mode
           </p>
         </div>
       </footer>

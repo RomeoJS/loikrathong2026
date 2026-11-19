@@ -17,7 +17,7 @@ export default function ManagementView({
     try {
       const res = await fetch(`/api/contestants?category=${category}`);
       const data = await res.json();
-      setContestants(data);
+      setContestants(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
     } finally {

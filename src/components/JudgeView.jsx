@@ -39,7 +39,7 @@ export default function JudgeView({
     try {
       const res = await fetch(`/api/contestants?category=${category}&round=${round}&judge_id=${judge.id}`);
       const data = await res.json();
-      setContestants(data);
+      setContestants(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load contestants:', err);
     } finally {

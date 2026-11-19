@@ -4,7 +4,7 @@ const cors = require('cors');
 const path = require('node:path');
 const fs = require('node:fs');
 const multer = require('multer');
-const { query, execute } = require('./db');
+const db = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -39,9 +39,7 @@ app.use('/images', express.static(path.join(__dirname, '../images')));
 // Settings
 app.get('/api/settings', async (req, res) => {
   try {
-    const rows = await query('SELECT `key`, `value` FROM settings');
-    const settings = {};
-    for (const r of rows) settings[r.key] = r.value;
+    const settings = await db.getSettings();
     res.json(settings);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -51,10 +49,7 @@ app.get('/api/settings', async (req, res) => {
 app.post('/api/settings', async (req, res) => {
   try {
     const { key, value } = req.body;
-    await query(`
-      INSERT INTO settings (\`key\`, \`value\`) VALUES (?, ?)
-      ON DUPLICATE KEY UPDATE \`value\` = VALUES(\`value\`)
-    `, [key, String(value)]);
+    await db.saveSetting(key, value);
     res.json({ success: true, key, value });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -64,20 +59,8 @@ app.post('/api/settings', async (req, res) => {
 // Judges
 app.get('/api/judges', async (req, res) => {
   try {
-    const judges = await query('SELECT * FROM judges ORDER BY id ASC');
-    const stats = await query(`
-      SELECT judge_id, round, COUNT(*) as scored_count 
-      FROM scores 
-      GROUP BY judge_id, round
-    `);
-
-    const judgesWithStats = judges.map(j => {
-      const r1 = stats.find(s => s.judge_id === j.id && s.round === 1)?.scored_count || 0;
-      const r2 = stats.find(s => s.judge_id === j.id && s.round === 2)?.scored_count || 0;
-      return { ...j, scored_r1: r1, scored_r2: r2 };
-    });
-
-    res.json(judgesWithStats);
+    const judges = await db.getJudges();
+    res.json(judges);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -87,7 +70,7 @@ app.put('/api/judges/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { name, title } = req.body;
-    await query('UPDATE judges SET name = ?, title = ? WHERE id = ?', [name, title || 'กรรมการผู้ทรงคุณวุฒิ', id]);
+    await db.updateJudge(id, name, title);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -98,43 +81,7 @@ app.put('/api/judges/:id', async (req, res) => {
 app.get('/api/contestants', async (req, res) => {
   try {
     const { category, round, judge_id } = req.query;
-    let sql = 'SELECT * FROM contestants WHERE 1=1';
-    const params = [];
-
-    if (category) {
-      sql += ' AND category = ?';
-      params.push(category);
-    }
-
-    if (round === '2') {
-      sql += ' AND round1_qualified = 1';
-    }
-
-    sql += ' ORDER BY number ASC';
-
-    const contestants = await query(sql, params);
-
-    // If judge_id and round are provided, attach scoring info for this judge
-    if (judge_id && round) {
-      const scores = await query(
-        'SELECT * FROM scores WHERE judge_id = ? AND round = ?',
-        [Number(judge_id), Number(round)]
-      );
-      const scoreMap = new Map();
-      scores.forEach(s => scoreMap.set(s.contestant_id, s));
-
-      const enriched = contestants.map(c => {
-        const score = scoreMap.get(c.id);
-        return {
-          ...c,
-          has_scored: !!score,
-          score_data: score || null,
-          total_score: score ? Number(score.total_score) : null
-        };
-      });
-      return res.json(enriched);
-    }
-
+    const contestants = await db.getContestants(category, round, judge_id);
     res.json(contestants);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -153,22 +100,14 @@ app.put('/api/contestants/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { prefix, first_name, last_name, school, image_url, round1_qualified } = req.body;
-    
-    let updates = [];
-    let params = [];
-
-    if (prefix !== undefined) { updates.push('prefix = ?'); params.push(prefix); }
-    if (first_name !== undefined) { updates.push('first_name = ?'); params.push(first_name); }
-    if (last_name !== undefined) { updates.push('last_name = ?'); params.push(last_name); }
-    if (school !== undefined) { updates.push('school = ?'); params.push(school); }
-    if (image_url !== undefined) { updates.push('image_url = ?'); params.push(image_url); }
-    if (round1_qualified !== undefined) { updates.push('round1_qualified = ?'); params.push(round1_qualified ? 1 : 0); }
-
-    if (updates.length > 0) {
-      params.push(id);
-      await query(`UPDATE contestants SET ${updates.join(', ')} WHERE id = ?`, params);
-    }
-
+    await db.updateContestant(id, {
+      prefix,
+      first_name,
+      last_name,
+      school,
+      image_url,
+      round1_qualified: round1_qualified !== undefined ? (round1_qualified ? 1 : 0) : undefined
+    });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -182,13 +121,8 @@ app.get('/api/scores', async (req, res) => {
     if (!judge_id || !contestant_id || !round) {
       return res.status(400).json({ error: 'judge_id, contestant_id, round required' });
     }
-
-    const scores = await query(
-      'SELECT * FROM scores WHERE judge_id = ? AND contestant_id = ? AND round = ?',
-      [Number(judge_id), Number(contestant_id), Number(round)]
-    );
-
-    res.json(scores[0] || null);
+    const score = await db.getScore(judge_id, contestant_id, round);
+    res.json(score || null);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -201,17 +135,16 @@ app.post('/api/scores', async (req, res) => {
       return res.status(400).json({ error: 'Missing required scoring fields' });
     }
 
-    const contestants = await query('SELECT category FROM contestants WHERE id = ?', [contestant_id]);
-    if (contestants.length === 0) {
+    const category = await db.getContestantCategory(contestant_id);
+    if (!category) {
       return res.status(404).json({ error: 'Contestant not found' });
     }
-    const contestant = contestants[0];
 
     let total = 0;
     let s = {};
 
     if (Number(round) === 1) {
-      const isMen = contestant.category === 'MEN';
+      const isMen = category === 'MEN';
       const dressAccMax = isMen ? 20 : 15;
       const hairMax = isMen ? 5 : 10;
       const shoesMax = 5;
@@ -235,41 +168,7 @@ app.post('/api/scores', async (req, res) => {
       total = s.c_dress_accuracy + s.c_hair + s.c_shoes + s.c_walk + s.c_stand + s.c_elegance + s.c_voice + s.c_face_symmetry + s.c_wai;
       total = Math.round(total * 100) / 100;
 
-      await query(`
-        INSERT INTO scores (
-          judge_id, contestant_id, round,
-          c_dress_accuracy, c_hair, c_shoes,
-          c_walk, c_stand, c_elegance, c_voice,
-          c_face_symmetry, c_wai,
-          total_score, comment, updated_at
-        ) VALUES (
-          ?, ?, ?,
-          ?, ?, ?,
-          ?, ?, ?, ?,
-          ?, ?,
-          ?, ?, CURRENT_TIMESTAMP
-        )
-        ON DUPLICATE KEY UPDATE
-          c_dress_accuracy = VALUES(c_dress_accuracy),
-          c_hair = VALUES(c_hair),
-          c_shoes = VALUES(c_shoes),
-          c_walk = VALUES(c_walk),
-          c_stand = VALUES(c_stand),
-          c_elegance = VALUES(c_elegance),
-          c_voice = VALUES(c_voice),
-          c_face_symmetry = VALUES(c_face_symmetry),
-          c_wai = VALUES(c_wai),
-          total_score = VALUES(total_score),
-          comment = VALUES(comment),
-          updated_at = CURRENT_TIMESTAMP
-      `, [
-        judge_id, contestant_id, round,
-        s.c_dress_accuracy, s.c_hair, s.c_shoes,
-        s.c_walk, s.c_stand, s.c_elegance, s.c_voice,
-        s.c_face_symmetry, s.c_wai,
-        total, comment || ''
-      ]);
-
+      await db.saveScore(judge_id, contestant_id, round, s, total, comment);
     } else {
       // Round 2
       s.c_r2_walk = Math.min(Math.max(Number(scores.c_r2_walk || 0), 0), 10);
@@ -282,34 +181,7 @@ app.post('/api/scores', async (req, res) => {
       total = s.c_r2_walk + s.c_r2_stand + s.c_r2_wai + s.c_r2_situation + s.c_r2_knowledge + s.c_r2_relevance;
       total = Math.round(total * 100) / 100;
 
-      await query(`
-        INSERT INTO scores (
-          judge_id, contestant_id, round,
-          c_r2_walk, c_r2_stand, c_r2_wai,
-          c_r2_situation, c_r2_knowledge, c_r2_relevance,
-          total_score, comment, updated_at
-        ) VALUES (
-          ?, ?, ?,
-          ?, ?, ?,
-          ?, ?, ?,
-          ?, ?, CURRENT_TIMESTAMP
-        )
-        ON DUPLICATE KEY UPDATE
-          c_r2_walk = VALUES(c_r2_walk),
-          c_r2_stand = VALUES(c_r2_stand),
-          c_r2_wai = VALUES(c_r2_wai),
-          c_r2_situation = VALUES(c_r2_situation),
-          c_r2_knowledge = VALUES(c_r2_knowledge),
-          c_r2_relevance = VALUES(c_r2_relevance),
-          total_score = VALUES(total_score),
-          comment = VALUES(comment),
-          updated_at = CURRENT_TIMESTAMP
-      `, [
-        judge_id, contestant_id, round,
-        s.c_r2_walk, s.c_r2_stand, s.c_r2_wai,
-        s.c_r2_situation, s.c_r2_knowledge, s.c_r2_relevance,
-        total, comment || ''
-      ]);
+      await db.saveScore(judge_id, contestant_id, round, s, total, comment);
     }
 
     res.json({ success: true, total_score: total, scores: s });
@@ -323,88 +195,8 @@ app.get('/api/admin/summary', async (req, res) => {
   try {
     const category = req.query.category || 'WOMEN';
     const round = Number(req.query.round) || 1;
-
-    const judges = await query('SELECT id, name FROM judges ORDER BY id ASC');
-    
-    let contestantsSql = 'SELECT * FROM contestants WHERE category = ?';
-    if (round === 2) {
-      contestantsSql += ' AND round1_qualified = 1';
-    }
-    contestantsSql += ' ORDER BY number ASC';
-    const contestants = await query(contestantsSql, [category]);
-
-    const scores = await query(`
-      SELECT s.*, j.name as judge_name 
-      FROM scores s
-      JOIN judges j ON s.judge_id = j.id
-      WHERE s.round = ?
-    `, [round]);
-
-    // Group scores by contestant
-    const scoreMap = new Map();
-    for (const sc of scores) {
-      if (!scoreMap.has(sc.contestant_id)) {
-        scoreMap.set(sc.contestant_id, []);
-      }
-      scoreMap.get(sc.contestant_id).push(sc);
-    }
-
-    const contestantSummaries = contestants.map(c => {
-      const cScores = scoreMap.get(c.id) || [];
-      const judgeScoresObj = {};
-      let sum = 0;
-      let dressSum = 0;
-
-      for (const j of judges) {
-        const found = cScores.find(s => s.judge_id === j.id);
-        if (found) {
-          const tot = Number(found.total_score);
-          judgeScoresObj[j.id] = {
-            total: tot,
-            details: found
-          };
-          sum += tot;
-          if (round === 1) {
-            dressSum += (Number(found.c_dress_accuracy) + Number(found.c_hair) + Number(found.c_shoes));
-          }
-        } else {
-          judgeScoresObj[j.id] = null;
-        }
-      }
-
-      const count = cScores.length;
-      const average = count > 0 ? Math.round((sum / count) * 100) / 100 : 0;
-      const overallAverage = Math.round((sum / (judges.length || 1)) * 100) / 100;
-
-      return {
-        ...c,
-        judge_scores: judgeScoresObj,
-        scored_judges_count: count,
-        total_judges_count: judges.length,
-        total_sum: Math.round(sum * 100) / 100,
-        average_score: average,
-        overall_average: overallAverage,
-        dress_total: Math.round(dressSum * 100) / 100,
-      };
-    });
-
-    // Rank candidates by average_score / total_sum descending
-    const sorted = [...contestantSummaries].sort((a, b) => b.total_sum - a.total_sum);
-    let rank = 1;
-    for (let i = 0; i < sorted.length; i++) {
-      if (i > 0 && sorted[i].total_sum < sorted[i - 1].total_sum) {
-        rank = i + 1;
-      }
-      sorted[i].rank = sorted[i].total_sum > 0 ? rank : '-';
-    }
-
-    res.json({
-      category,
-      round,
-      judges,
-      contestants: sorted,
-      total_contestants: sorted.length
-    });
+    const summary = await db.getAdminSummary(category, round);
+    res.json(summary);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -415,29 +207,7 @@ app.post('/api/admin/qualify-round-1', async (req, res) => {
   try {
     const { category, contestant_ids } = req.body;
     if (!category) return res.status(400).json({ error: 'category required' });
-
-    // Reset qualification for this category
-    await query('UPDATE contestants SET round1_qualified = 0 WHERE category = ?', [category]);
-
-    let qualifiedIds = contestant_ids;
-    // If not provided, calculate top 6 automatically based on total scores in round 1
-    if (!qualifiedIds || qualifiedIds.length === 0) {
-      const top6 = await query(`
-        SELECT c.id, COALESCE(SUM(s.total_score), 0) as total
-        FROM contestants c
-        LEFT JOIN scores s ON c.id = s.contestant_id AND s.round = 1
-        WHERE c.category = ?
-        GROUP BY c.id
-        ORDER BY total DESC, c.number ASC
-        LIMIT 6
-      `, [category]);
-      qualifiedIds = top6.map(t => t.id);
-    }
-
-    for (const id of qualifiedIds) {
-      await query('UPDATE contestants SET round1_qualified = 1 WHERE id = ?', [id]);
-    }
-
+    const qualifiedIds = await db.qualifyRound1(category, contestant_ids);
     res.json({ success: true, qualified_count: qualifiedIds.length, qualified_ids: qualifiedIds });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -449,30 +219,7 @@ app.post('/api/admin/finalize-round-2', async (req, res) => {
   try {
     const { category, winner_id, runner_up_1_id, runner_up_2_id, costume_id, popular_id } = req.body;
     if (!category) return res.status(400).json({ error: 'category required' });
-
-    // Reset awards for this category
-    await query(`
-      UPDATE contestants 
-      SET round2_rank = NULL, award_costume = 0, award_popular = 0
-      WHERE category = ?
-    `, [category]);
-
-    if (winner_id) {
-      await query('UPDATE contestants SET round2_rank = 1 WHERE id = ?', [winner_id]);
-    }
-    if (runner_up_1_id) {
-      await query('UPDATE contestants SET round2_rank = 2 WHERE id = ?', [runner_up_1_id]);
-    }
-    if (runner_up_2_id) {
-      await query('UPDATE contestants SET round2_rank = 3 WHERE id = ?', [runner_up_2_id]);
-    }
-    if (costume_id) {
-      await query('UPDATE contestants SET award_costume = 1 WHERE id = ?', [costume_id]);
-    }
-    if (popular_id) {
-      await query('UPDATE contestants SET award_popular = 1 WHERE id = ?', [popular_id]);
-    }
-
+    await db.finalizeRound2(category, { winner_id, runner_up_1_id, runner_up_2_id, costume_id, popular_id });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -483,24 +230,7 @@ app.post('/api/admin/finalize-round-2', async (req, res) => {
 app.post('/api/admin/reset-scores', async (req, res) => {
   try {
     const { round, category } = req.body;
-    if (category && category !== 'ALL') {
-      const contestants = await query('SELECT id FROM contestants WHERE category = ?', [category]);
-      const cIds = contestants.map(c => c.id);
-      if (cIds.length > 0) {
-        const placeholders = cIds.map(() => '?').join(',');
-        if (round) {
-          await query(`DELETE FROM scores WHERE contestant_id IN (${placeholders}) AND round = ?`, [...cIds, round]);
-        } else {
-          await query(`DELETE FROM scores WHERE contestant_id IN (${placeholders})`, cIds);
-        }
-      }
-    } else {
-      if (round) {
-        await query('DELETE FROM scores WHERE round = ?', [round]);
-      } else {
-        await query('DELETE FROM scores');
-      }
-    }
+    await db.resetScores(round, category);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -512,18 +242,8 @@ app.post('/api/admin/seed-demo-scores', async (req, res) => {
   try {
     const { round, category } = req.body;
     const targetRound = Number(round) || 1;
-    const judges = await query('SELECT id FROM judges');
-    
-    let cSql = 'SELECT * FROM contestants WHERE 1=1';
-    const params = [];
-    if (category && category !== 'ALL') {
-      cSql += ' AND category = ?';
-      params.push(category);
-    }
-    if (targetRound === 2) {
-      cSql += ' AND round1_qualified = 1';
-    }
-    const contestants = await query(cSql, params);
+    const judges = await db.getJudges();
+    const contestants = await db.getContestants(category, targetRound === 2 ? 2 : undefined);
 
     for (const c of contestants) {
       for (const j of judges) {
@@ -540,28 +260,17 @@ app.post('/api/admin/seed-demo-scores', async (req, res) => {
           const wai = Math.floor(Math.random() * 2) + 9;
           const total = dressAcc + hair + shoes + walk + stand + elegance + voice + face + wai;
 
-          await query(`
-            INSERT INTO scores (
-              judge_id, contestant_id, round,
-              c_dress_accuracy, c_hair, c_shoes,
-              c_walk, c_stand, c_elegance, c_voice,
-              c_face_symmetry, c_wai,
-              total_score, comment, updated_at
-            ) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'คะแนนจำลองทดสอบ', CURRENT_TIMESTAMP)
-            ON DUPLICATE KEY UPDATE
-              c_dress_accuracy = VALUES(c_dress_accuracy),
-              c_hair = VALUES(c_hair),
-              c_shoes = VALUES(c_shoes),
-              c_walk = VALUES(c_walk),
-              c_stand = VALUES(c_stand),
-              c_elegance = VALUES(c_elegance),
-              c_voice = VALUES(c_voice),
-              c_face_symmetry = VALUES(c_face_symmetry),
-              c_wai = VALUES(c_wai),
-              total_score = VALUES(total_score),
-              updated_at = CURRENT_TIMESTAMP
-          `, [j.id, c.id, dressAcc, hair, shoes, walk, stand, elegance, voice, face, wai, total]);
-
+          await db.saveScore(j.id, c.id, 1, {
+            c_dress_accuracy: dressAcc,
+            c_hair: hair,
+            c_shoes: shoes,
+            c_walk: walk,
+            c_stand: stand,
+            c_elegance: elegance,
+            c_voice: voice,
+            c_face_symmetry: face,
+            c_wai: wai
+          }, total, 'คะแนนจำลองทดสอบ');
         } else {
           // Round 2
           const walk = Math.floor(Math.random() * 3) + 8;
@@ -572,23 +281,14 @@ app.post('/api/admin/seed-demo-scores', async (req, res) => {
           const relevance = Math.floor(Math.random() * 4) + 17;
           const total = walk + stand + wai + situation + knowledge + relevance;
 
-          await query(`
-            INSERT INTO scores (
-              judge_id, contestant_id, round,
-              c_r2_walk, c_r2_stand, c_r2_wai,
-              c_r2_situation, c_r2_knowledge, c_r2_relevance,
-              total_score, comment, updated_at
-            ) VALUES (?, ?, 2, ?, ?, ?, ?, ?, ?, ?, 'คะแนนจำลองทดสอบรอบสอง', CURRENT_TIMESTAMP)
-            ON DUPLICATE KEY UPDATE
-              c_r2_walk = VALUES(c_r2_walk),
-              c_r2_stand = VALUES(c_r2_stand),
-              c_r2_wai = VALUES(c_r2_wai),
-              c_r2_situation = VALUES(c_r2_situation),
-              c_r2_knowledge = VALUES(c_r2_knowledge),
-              c_r2_relevance = VALUES(c_r2_relevance),
-              total_score = VALUES(total_score),
-              updated_at = CURRENT_TIMESTAMP
-          `, [j.id, c.id, walk, stand, wai, situation, knowledge, relevance, total]);
+          await db.saveScore(j.id, c.id, 2, {
+            c_r2_walk: walk,
+            c_r2_stand: stand,
+            c_r2_wai: wai,
+            c_r2_situation: situation,
+            c_r2_knowledge: knowledge,
+            c_r2_relevance: relevance
+          }, total, 'คะแนนจำลองทดสอบรอบสอง');
         }
       }
     }
@@ -608,6 +308,12 @@ if (fs.existsSync(distPath)) {
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT} (Connected to MySQL/MariaDB database: ${process.env.DB_NAME || 'loikrathong2026'})`);
+// Start database and server
+db.initDatabase().then(() => {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT} (Database mode: ${db.getDbType()})`);
+  });
+}).catch(err => {
+  console.error('Fatal initialization error:', err);
+  process.exit(1);
 });
