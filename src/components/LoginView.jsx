@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, UserCheck, Lock, User, ArrowRight, Sparkles, KeyRound, AlertCircle } from 'lucide-react';
+import { ShieldCheck, UserCheck, Lock, User, ArrowRight, Sparkles, Crown } from 'lucide-react';
 
 export default function LoginView({ onLoginSuccess }) {
   const [roleTab, setRoleTab] = useState('judge'); // 'judge' | 'admin'
@@ -64,33 +64,31 @@ export default function LoginView({ onLoginSuccess }) {
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-8">
-      <div className="bg-slate-900/90 border border-amber-500/40 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl backdrop-blur-xl relative overflow-hidden">
+      <div className="bg-slate-900/90 border border-amber-500/30 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl backdrop-blur-xl relative overflow-hidden">
         
         {/* Decorative Top Glow */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-2 bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-1.5 bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
         
-        {/* University Logo & Event Heading */}
+        {/* Emblem & Event Heading (Logo removed as requested) */}
         <div className="text-center mb-6">
-          <div className="inline-block bg-white/10 p-2 rounded-2xl border border-amber-400/30 shadow-inner mb-3">
-            <img
-              src="/images/header_logo.png"
-              alt="ตรามหาวิทยาลัยเทคโนโลยีราชมงคลกรุงเทพ"
-              className="h-16 w-auto object-contain mx-auto filter drop-shadow"
-            />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400/20 via-amber-500/10 to-transparent border border-amber-400/40 shadow-lg shadow-amber-500/10 mb-3 group hover:scale-105 transition-transform">
+            <Crown className="w-8 h-8 text-amber-400" />
           </div>
-          <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30">
-            ระบบตัดสินคะแนนดิจิทัล RMUTK ๒๕๖๙
-          </span>
-          <h2 className="text-xl sm:text-2xl font-bold text-white mt-2 bg-gradient-to-r from-amber-200 via-amber-400 to-amber-100 bg-clip-text text-transparent">
+          <div>
+            <span className="text-xs px-3 py-1 rounded-full bg-amber-500/15 text-amber-300 font-semibold border border-amber-500/30 tracking-wider">
+              RMUTK LOI KRATHONG ๒๕๖๙
+            </span>
+          </div>
+          <h2 className="text-xl sm:text-2xl font-bold text-white mt-3 bg-gradient-to-r from-amber-200 via-amber-400 to-amber-100 bg-clip-text text-transparent">
             เข้าสู่ระบบตัดสินคะแนน
           </h2>
           <p className="text-xs text-amber-200/70 mt-1">
-            การประกวดเทพบุตรและนางนพมาศ ราชมงคลกรุงเทพ
+            การประกวดเทพบุตรและนางนพมาศ มหาวิทยาลัยเทคโนโลยีราชมงคลกรุงเทพ
           </p>
         </div>
 
         {/* Role Switcher Tabs */}
-        <div className="grid grid-cols-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800 mb-6">
+        <div className="grid grid-cols-2 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800 mb-6">
           <button
             type="button"
             onClick={() => { setRoleTab('judge'); setErrorMsg(''); }}
@@ -119,8 +117,8 @@ export default function LoginView({ onLoginSuccess }) {
 
         {/* Error Alert */}
         {errorMsg && (
-          <div className="mb-5 bg-rose-950/70 border border-rose-500/50 text-rose-300 text-xs p-3 rounded-xl flex items-center gap-2 animate-shake">
-            <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-400" />
+          <div className="mb-5 bg-rose-950/70 border border-rose-500/50 text-rose-300 text-xs p-3 rounded-xl flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse flex-shrink-0" />
             <span>{errorMsg}</span>
           </div>
         )}
@@ -144,11 +142,11 @@ export default function LoginView({ onLoginSuccess }) {
                         onClick={() => setSelectedJudgeNum(num)}
                         className={`p-3 rounded-xl border text-center transition-all ${
                           isSelected
-                            ? 'bg-amber-500/20 border-amber-400 text-amber-300 font-bold shadow-md'
+                            ? 'bg-amber-500/20 border-amber-400 text-amber-300 font-bold shadow-md shadow-amber-500/10'
                             : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
                         }`}
                       >
-                        <div className="text-sm">กรรมการท่านที่</div>
+                        <div className="text-[11px] text-slate-400">กรรมการท่านที่</div>
                         <div className="text-lg font-black text-amber-400 mt-0.5">
                           {num === 1 ? '๑' : num === 2 ? '๒' : '๓'}
                         </div>
@@ -174,7 +172,7 @@ export default function LoginView({ onLoginSuccess }) {
                   />
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  * รหัสผ่านเริ่มต้นคือ: <code className="text-amber-400 bg-slate-950 px-1 py-0.5 rounded">1234</code>
+                  * รหัสผ่านเริ่มต้นคือ: <code className="text-amber-400 bg-slate-950 px-1.5 py-0.5 rounded font-mono">1234</code>
                 </p>
               </div>
             </>
@@ -213,7 +211,7 @@ export default function LoginView({ onLoginSuccess }) {
                   />
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  * บัญชีเริ่มต้น: <code className="text-amber-400 bg-slate-950 px-1 py-0.5 rounded">admin</code> / <code className="text-amber-400 bg-slate-950 px-1 py-0.5 rounded">admin123</code>
+                  * บัญชีเริ่มต้น: <code className="text-amber-400 bg-slate-950 px-1.5 py-0.5 rounded font-mono">admin</code> / <code className="text-amber-400 bg-slate-950 px-1.5 py-0.5 rounded font-mono">admin123</code>
                 </p>
               </div>
             </>

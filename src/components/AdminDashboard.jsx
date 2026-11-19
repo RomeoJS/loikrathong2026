@@ -15,7 +15,12 @@ import {
   Sliders,
   Crown,
   LayoutGrid,
-  Table
+  Table,
+  Edit3,
+  Save,
+  Search,
+  Check,
+  Filter
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -29,6 +34,16 @@ export default function AdminDashboard({
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState('judges'); // 'judges' | 'criteria'
   const [selectedScoreDetail, setSelectedScoreDetail] = useState(null);
+  
+  // Search & Filter
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterMode, setFilterMode] = useState('all'); // 'all' | 'qualified'
+
+  // Admin Direct Score Edit State
+  const [editingScore, setEditingScore] = useState(null);
+  // editingScore: { contestant, judgeId, scores: {}, comment: '', saving: false, successMsg: '' }
+
+  // Qualify & Award Modals
   const [showQualifyModal, setShowQualifyModal] = useState(false);
   const [selectedQualifyIds, setSelectedQualifyIds] = useState([]);
   const [showAwardModal, setShowAwardModal] = useState(false);
@@ -80,6 +95,163 @@ export default function AdminDashboard({
   useEffect(() => {
     fetchSummary();
   }, [category, round]);
+
+  const contestants = summaryData?.contestants || [];
+  const judges = (summaryData?.judges || []).slice(0, 3);
+  const isWomen = category === 'WOMEN';
+
+  // Helper to open Edit Score Modal
+  const handleOpenEditScore = (contestant, targetJudgeId = 1) => {
+    const jId = Number(targetJudgeId);
+    const existing = contestant.judge_scores?.[jId]?.details;
+
+    let initialScores = {};
+    if (round === 1) {
+      initialScores = {
+        c_dress_accuracy: existing?.c_dress_accuracy ?? (isWomen ? 12 : 16),
+        c_hair: existing?.c_hair ?? (isWomen ? 8 : 4),
+        c_shoes: existing?.c_shoes ?? 4,
+        c_walk: existing?.c_walk ?? 4,
+        c_stand: existing?.c_stand ?? 4,
+        c_elegance: existing?.c_elegance ?? 12,
+        c_voice: existing?.c_voice ?? 4,
+        c_face_symmetry: existing?.c_face_symmetry ?? 24,
+        c_wai: existing?.c_wai ?? 8
+      };
+    } else {
+      initialScores = {
+        c_r2_walk: existing?.c_r2_walk ?? 8,
+        c_r2_stand: existing?.c_r2_stand ?? 8,
+        c_r2_wai: existing?.c_r2_wai ?? 8,
+        c_r2_situation: existing?.c_r2_situation ?? 16,
+        c_r2_knowledge: existing?.c_r2_knowledge ?? 25,
+        c_r2_relevance: existing?.c_r2_relevance ?? 16
+      };
+    }
+
+    setEditingScore({
+      contestant,
+      judgeId: jId,
+      scores: initialScores,
+      comment: existing?.comment || '',
+      saving: false,
+      successMsg: ''
+    });
+  };
+
+  // Switch Judge inside Edit Modal
+  const handleSwitchJudgeInEdit = (targetJudgeId) => {
+    if (!editingScore) return;
+    const jId = Number(targetJudgeId);
+    const existing = editingScore.contestant.judge_scores?.[jId]?.details;
+
+    let initialScores = {};
+    if (round === 1) {
+      initialScores = {
+        c_dress_accuracy: existing?.c_dress_accuracy ?? (isWomen ? 12 : 16),
+        c_hair: existing?.c_hair ?? (isWomen ? 8 : 4),
+        c_shoes: existing?.c_shoes ?? 4,
+        c_walk: existing?.c_walk ?? 4,
+        c_stand: existing?.c_stand ?? 4,
+        c_elegance: existing?.c_elegance ?? 12,
+        c_voice: existing?.c_voice ?? 4,
+        c_face_symmetry: existing?.c_face_symmetry ?? 24,
+        c_wai: existing?.c_wai ?? 8
+      };
+    } else {
+      initialScores = {
+        c_r2_walk: existing?.c_r2_walk ?? 8,
+        c_r2_stand: existing?.c_r2_stand ?? 8,
+        c_r2_wai: existing?.c_r2_wai ?? 8,
+        c_r2_situation: existing?.c_r2_situation ?? 16,
+        c_r2_knowledge: existing?.c_r2_knowledge ?? 25,
+        c_r2_relevance: existing?.c_r2_relevance ?? 16
+      };
+    }
+
+    setEditingScore({
+      ...editingScore,
+      judgeId: jId,
+      scores: initialScores,
+      comment: existing?.comment || '',
+      successMsg: ''
+    });
+  };
+
+  // Update criterion value
+  const handleScoreFieldChange = (key, val, maxVal) => {
+    if (!editingScore) return;
+    let num = parseFloat(val);
+    if (isNaN(num)) num = 0;
+    if (num < 0) num = 0;
+    if (num > maxVal) num = maxVal;
+    num = Math.round(num * 10) / 10;
+
+    setEditingScore({
+      ...editingScore,
+      scores: {
+        ...editingScore.scores,
+        [key]: num
+      },
+      successMsg: ''
+    });
+  };
+
+  // Save edited score
+  const handleSaveScore = async () => {
+    if (!editingScore) return;
+    setEditingScore(prev => ({ ...prev, saving: true, successMsg: '' }));
+
+    try {
+      const res = await fetch('/api/scores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          judge_id: editingScore.judgeId,
+          contestant_id: editingScore.contestant.id,
+          round,
+          scores: editingScore.scores,
+          comment: editingScore.comment
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setEditingScore(prev => ({ 
+          ...prev, 
+          saving: false, 
+          successMsg: `บันทึกคะแนนของกรรมการท่านที่ ${editingScore.judgeId} สำเร็จ (รวม: ${data.total} คะแนน)` 
+        }));
+
+        // Refresh live summary data
+        await fetchSummary();
+        if (onDataChanged) onDataChanged();
+
+        // Update contestant inside editing modal so subsequent tabs have fresh state
+        setTimeout(() => {
+          setEditingScore(prev => {
+            if (!prev) return null;
+            return { ...prev, successMsg: '' };
+          });
+        }, 3000);
+      } else {
+        alert(data.error || 'บันทึกคะแนนไม่สำเร็จ');
+        setEditingScore(prev => ({ ...prev, saving: false }));
+      }
+    } catch (err) {
+      console.error(err);
+      alert('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+      setEditingScore(prev => ({ ...prev, saving: false }));
+    }
+  };
+
+  // Calculate current edit total
+  const calculateEditTotal = () => {
+    if (!editingScore || !editingScore.scores) return 0;
+    const vals = Object.values(editingScore.scores);
+    const sum = vals.reduce((a, b) => a + (parseFloat(b) || 0), 0);
+    return Math.round(sum * 100) / 100;
+  };
 
   const handleConfirmQualify = async () => {
     setActionLoading(true);
@@ -175,41 +347,62 @@ export default function AdminDashboard({
     }
   };
 
+  // Filter contestants by search & filter mode
+  const filteredContestants = contestants.filter(c => {
+    if (filterMode === 'qualified' && round === 1 && c.round1_qualified !== 1) {
+      return false;
+    }
+    if (!searchTerm.trim()) return true;
+    const term = searchTerm.toLowerCase();
+    const fullName = `${c.prefix || ''}${c.first_name || ''} ${c.last_name || ''}`.toLowerCase();
+    const num = String(c.number);
+    const school = (c.school || '').toLowerCase();
+    return fullName.includes(term) || num.includes(term) || school.includes(term);
+  });
+
   if (loading && !summaryData) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <RefreshCw className="w-8 h-8 text-amber-400 animate-spin" />
-        <span className="ml-3 text-slate-300">กำลังประมวลผลคะแนนเฉลี่ย ๓ ท่าน...</span>
+      <div className="flex flex-col items-center justify-center py-24 space-y-4">
+        <div className="relative">
+          <div className="w-14 h-14 rounded-full border-4 border-amber-500/20 border-t-amber-400 animate-spin" />
+          <Crown className="w-6 h-6 text-amber-400 absolute inset-0 m-auto" />
+        </div>
+        <p className="text-sm font-semibold text-slate-300">กำลังประมวลผลคะแนนเฉลี่ย ๓ ท่าน...</p>
       </div>
     );
   }
 
-  const contestants = summaryData?.contestants || [];
-  const judges = (summaryData?.judges || []).slice(0, 3);
-  const isWomen = category === 'WOMEN';
-
   return (
     <div className="space-y-6">
-      {/* Top Banner & Control Toolbar */}
-      <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-5 shadow-xl">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+      {/* ================= Top Banner & Control Console ================= */}
+      <div className="bg-gradient-to-br from-slate-900 via-slate-900/95 to-slate-950 border border-amber-500/30 rounded-3xl p-5 sm:p-6 shadow-2xl backdrop-blur-xl relative overflow-hidden">
+        {/* Decorative Top Accent Glow */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-amber-400 to-transparent opacity-80" />
+        
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30">
+              <span className="text-xs px-3 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40 tracking-wider">
                 ADMIN CONSOLE
               </span>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs font-semibold text-slate-400">
                 {category === 'WOMEN' ? 'การประกวดนางนพมาศ' : 'การประกวดเทพบุตร'}
               </span>
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                ระบบคิดคะแนนเฉลี่ย ๓ ท่าน
+              </span>
             </div>
-            <h2 className="text-xl font-bold text-white mt-1 flex items-center gap-2">
-              <Trophy className="w-5 h-5 text-amber-400" />
+
+            <h2 className="text-xl sm:text-2xl font-black text-white mt-1.5 flex items-center gap-2.5">
+              <Trophy className="w-6 h-6 text-amber-400 drop-shadow" />
               <span>
-                ตารางสรุปคะแนนและจัดอันดับ รอบที่ {round === 1 ? '๑ (คัดเหลือ ๖ คน)' : '๒ (ชิงชนะเลิศ)'}
+                ตารางสรุปคะแนนและจัดการอันดับ รอบที่ {round === 1 ? '๑ (คัดเหลือ ๖ คน)' : '๒ (ชิงชนะเลิศ)'}
               </span>
             </h2>
-            <p className="text-xs text-amber-200/80 mt-1">
-              * เกณฑ์การคำนวณ: รวมคะแนนของกรรมการทั้ง ๓ ท่านในแต่ละช่องเกณฑ์แล้วหาร ๓
+
+            <p className="text-xs text-amber-200/80 mt-1 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>เกณฑ์การคำนวณ: รวมคะแนนของกรรมการทั้ง ๓ ท่านในแต่ละช่องเกณฑ์แล้วหาร ๓ (แอดมินสามารถคลิกแก้ไขคะแนนได้โดยตรง)</span>
             </p>
           </div>
 
@@ -218,7 +411,7 @@ export default function AdminDashboard({
             {round === 1 ? (
               <button
                 onClick={() => setShowQualifyModal(true)}
-                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-bold text-sm shadow-lg shadow-amber-500/20 flex items-center gap-2 transition-all"
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-bold text-xs sm:text-sm shadow-xl shadow-amber-500/20 flex items-center gap-2 transition-all hover:scale-[1.02]"
               >
                 <Crown className="w-4 h-4" />
                 <span>คัดเลือก ๖ คนเข้ารอบ ๒</span>
@@ -226,7 +419,7 @@ export default function AdminDashboard({
             ) : (
               <button
                 onClick={() => setShowAwardModal(true)}
-                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-bold text-sm shadow-lg shadow-amber-500/20 flex items-center gap-2 transition-all"
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-bold text-xs sm:text-sm shadow-xl shadow-amber-500/20 flex items-center gap-2 transition-all hover:scale-[1.02]"
               >
                 <Crown className="w-4 h-4" />
                 <span>สรุปผลรางวัล & ชนะเลิศ</span>
@@ -237,10 +430,10 @@ export default function AdminDashboard({
               onClick={handleSeedDemo}
               disabled={actionLoading}
               title="สุ่มกรอกคะแนนสมจริงของกรรมการ ๓ ท่านเพื่อทดสอบระบบ"
-              className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+              className="px-3.5 py-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>จำลองคะแนน (๓ กรรมการ)</span>
+              <span>จำลองคะแนน (๓ ท่าน)</span>
             </button>
 
             <button
@@ -255,7 +448,7 @@ export default function AdminDashboard({
             <button
               onClick={fetchSummary}
               disabled={loading}
-              className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+              className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors shadow-sm"
               title="รีเฟรชคะแนนล่าสุด"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -264,23 +457,23 @@ export default function AdminDashboard({
         </div>
 
         {/* Quick Stats Overview */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-4 border-t border-slate-800">
-          <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-            <div className="text-[11px] text-slate-400">ผู้เข้าประกวดทั้งหมด</div>
-            <div className="text-xl font-bold text-white mt-0.5">{contestants.length} คน</div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-slate-800/90">
+          <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800/80 backdrop-blur-sm">
+            <div className="text-[11px] font-medium text-slate-400">ผู้เข้าประกวดทั้งหมด</div>
+            <div className="text-xl font-black text-white mt-0.5">{contestants.length} คน</div>
           </div>
-          <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-            <div className="text-[11px] text-slate-400">กรรมการตัดสิน</div>
-            <div className="text-xl font-bold text-amber-400 mt-0.5">๓ ท่าน</div>
+          <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800/80 backdrop-blur-sm">
+            <div className="text-[11px] font-medium text-slate-400">กรรมการตัดสิน</div>
+            <div className="text-xl font-black text-amber-400 mt-0.5">๓ ท่าน</div>
           </div>
-          <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-            <div className="text-[11px] text-slate-400">อันดับ ๑ ปัจจุบัน (คะแนนเฉลี่ย)</div>
+          <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800/80 backdrop-blur-sm">
+            <div className="text-[11px] font-medium text-slate-400">อันดับ ๑ ปัจจุบัน (คะแนนเฉลี่ย)</div>
             <div className="text-sm font-bold text-emerald-400 mt-1 truncate">
               {contestants[0] ? `#${contestants[0].number} ${contestants[0].first_name} (${contestants[0].average_score} คะแนน)` : '-'}
             </div>
           </div>
-          <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-            <div className="text-[11px] text-slate-400">
+          <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800/80 backdrop-blur-sm">
+            <div className="text-[11px] font-medium text-slate-400">
               {round === 1 ? 'ผ่านเข้ารอบ ๒ แล้ว' : 'ผู้ชนะเลิศอันดับ ๑'}
             </div>
             <div className="text-sm font-bold text-amber-300 mt-1 truncate">
@@ -294,35 +487,87 @@ export default function AdminDashboard({
         </div>
       </div>
 
-      {/* Main Table: Scores Matrix & Judges Breakdown */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
-        <div className="p-4 bg-slate-950 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Medal className="w-5 h-5 text-amber-400" />
-            <h3 className="font-bold text-white text-base">
-              ตารางสรุปคะแนนกรรมการ ๓ ท่าน & คะแนนเฉลี่ยแต่ละช่อง
-            </h3>
-          </div>
+      {/* ================= Filter & View Mode Controls ================= */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-900/80 border border-slate-800 p-3 rounded-2xl">
+        {/* Search Input */}
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="ค้นหาตามชื่อ, หมายเลข หรือคณะ/สาขา..."
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 pl-9 pr-4 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Filter & View Mode Switcher */}
+        <div className="flex flex-wrap items-center gap-2">
+          {round === 1 && (
+            <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+              <button
+                onClick={() => setFilterMode('all')}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  filterMode === 'all' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                ทั้งหมด ({contestants.length})
+              </button>
+              <button
+                onClick={() => setFilterMode('qualified')}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  filterMode === 'qualified' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                เฉพาะผู้เข้ารอบ ({contestants.filter(c => c.round1_qualified === 1).length})
+              </button>
+            </div>
+          )}
 
           {/* Toggle View Mode */}
-          <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
+          <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
             <button
               onClick={() => setViewMode('judges')}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-                viewMode === 'judges' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'
+              className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+                viewMode === 'judges' ? 'bg-amber-500 text-slate-950 font-bold shadow-md' : 'text-slate-400 hover:text-white'
               }`}
             >
-              แสดงคะแนนรายกรรมการ (ก.๑, ก.๒, ก.๓)
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>คะแนนรายกรรมการ (ก.๑, ก.๒, ก.๓)</span>
             </button>
             <button
               onClick={() => setViewMode('criteria')}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-                viewMode === 'criteria' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'
+              className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+                viewMode === 'criteria' ? 'bg-amber-500 text-slate-950 font-bold shadow-md' : 'text-slate-400 hover:text-white'
               }`}
             >
-              แสดงเกณฑ์เฉลี่ยแต่ละช่อง (หาร ๓)
+              <Table className="w-3.5 h-3.5" />
+              <span>เกณฑ์เฉลี่ยแต่ละช่อง (หาร ๓)</span>
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* ================= Main Table: Scores Matrix & Controls ================= */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+        <div className="p-4 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Medal className="w-5 h-5 text-amber-400" />
+            <h3 className="font-bold text-white text-sm sm:text-base">
+              ตารางสรุปคะแนนกรรมการ ๓ ท่าน & จัดอันดับ
+            </h3>
+          </div>
+          <span className="text-xs text-amber-300/80 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/30">
+            💡 คลิกปุ่ม <b className="text-amber-400">"แก้ไขคะแนน"</b> หรือคลิกที่ <b className="text-amber-400">ช่องคะแนน</b> เพื่อแก้ไข
+          </span>
         </div>
 
         {/* MODE 1: JUDGES VIEW */}
@@ -330,178 +575,206 @@ export default function AdminDashboard({
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-sm">
               <thead>
-                <tr className="bg-slate-950/90 text-slate-300 border-b border-slate-800 text-xs">
+                <tr className="bg-slate-950/95 text-slate-300 border-b border-slate-800 text-xs">
                   <th className="py-3.5 px-3 font-semibold text-center w-12">อันดับ</th>
                   <th className="py-3.5 px-3 font-semibold text-center w-16">หมายเลข</th>
                   <th className="py-3.5 px-3 font-semibold">ผู้เข้าประกวด</th>
-                  <th className="py-3.5 px-3 font-semibold">สถานศึกษา</th>
+                  <th className="py-3.5 px-3 font-semibold hidden md:table-cell">สถานศึกษา / สังกัด</th>
                   {judges.map((j) => (
                     <th key={j.id} className="py-3.5 px-2 font-semibold text-center w-28">
-                      <div className="text-xs text-amber-300 truncate">
+                      <div className="text-xs text-amber-300 font-bold truncate">
                         {j.name}
                       </div>
+                      <div className="text-[10px] text-slate-500 font-normal">กรรมการ {j.id}</div>
                     </th>
                   ))}
                   <th className="py-3.5 px-3 font-bold text-amber-400 text-center bg-slate-900/60 w-28">
-                    คะแนนรวม (๓ ท่าน)
+                    รวม (๓ ท่าน)
                   </th>
                   <th className="py-3.5 px-3 font-bold text-emerald-400 text-center bg-slate-900/60 w-28">
-                    คะแนนเฉลี่ย (หาร ๓)
+                    เฉลี่ย (หาร ๓)
                   </th>
+                  <th className="py-3.5 px-3 font-semibold text-center">จัดการคะแนน</th>
                   <th className="py-3.5 px-3 font-semibold text-center">สถานะ / รางวัล</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/80">
-                {contestants.map((c, index) => {
-                  const isTop6 = index < 6;
-                  const isQualified = c.round1_qualified === 1;
-                  const rank1 = c.round2_rank === 1;
-                  const rank2 = c.round2_rank === 2;
-                  const rank3 = c.round2_rank === 3;
+                {filteredContestants.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="py-12 text-center text-slate-500 text-sm">
+                      ไม่พบข้อมูลผู้เข้าประกวดที่ตรงกับคำค้นหา
+                    </td>
+                  </tr>
+                ) : (
+                  filteredContestants.map((c, index) => {
+                    const isTop6 = index < 6;
+                    const isQualified = c.round1_qualified === 1;
+                    const rank1 = c.round2_rank === 1;
+                    const rank2 = c.round2_rank === 2;
+                    const rank3 = c.round2_rank === 3;
 
-                  return (
-                    <tr
-                      key={c.id}
-                      className={`hover:bg-slate-800/40 transition-colors ${
-                        round === 1 && isQualified
-                          ? 'bg-amber-500/5'
-                          : rank1
-                          ? 'bg-amber-400/10 font-medium'
-                          : ''
-                      }`}
-                    >
-                      {/* Rank */}
-                      <td className="py-3 px-3 text-center">
-                        {c.rank === 1 ? (
-                          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-400 text-slate-950 font-black text-xs shadow-md">
-                            1
-                          </span>
-                        ) : c.rank === 2 ? (
-                          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-300 text-slate-950 font-black text-xs shadow-md">
-                            2
-                          </span>
-                        ) : c.rank === 3 ? (
-                          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-700 text-white font-black text-xs shadow-md">
-                            3
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 font-semibold">{c.rank}</span>
-                        )}
-                      </td>
+                    return (
+                      <tr
+                        key={c.id}
+                        className={`hover:bg-slate-800/40 transition-colors ${
+                          round === 1 && isQualified
+                            ? 'bg-amber-500/5'
+                            : rank1
+                            ? 'bg-amber-400/10 font-medium'
+                            : ''
+                        }`}
+                      >
+                        {/* Rank */}
+                        <td className="py-3 px-3 text-center">
+                          {c.rank === 1 ? (
+                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gradient-to-br from-amber-300 to-amber-500 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20">
+                              1
+                            </span>
+                          ) : c.rank === 2 ? (
+                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-300 text-slate-950 font-black text-xs shadow-md">
+                              2
+                            </span>
+                          ) : c.rank === 3 ? (
+                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-700 text-white font-black text-xs shadow-md">
+                              3
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 font-semibold">{c.rank}</span>
+                          )}
+                        </td>
 
-                      {/* Number */}
-                      <td className="py-3 px-3 text-center">
-                        <span className="font-mono font-bold text-amber-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-700">
-                          #{String(c.number).padStart(2, '0')}
-                        </span>
-                      </td>
+                        {/* Number */}
+                        <td className="py-3 px-3 text-center">
+                          <span className="font-mono font-bold text-amber-400 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-700 shadow-inner">
+                            #{String(c.number).padStart(2, '0')}
+                          </span>
+                        </td>
 
-                      {/* Photo & Name */}
-                      <td className="py-3 px-3">
-                        <div className="flex items-center space-x-3">
-                          <img
-                            src={c.image_url || '/images/placeholder.svg'}
-                            alt=""
-                            className="w-10 h-10 rounded-xl object-cover object-top border border-slate-700"
-                            onError={(e) => {
-                              e.target.onerror = null;
-                              e.target.src = '/images/placeholder.svg';
-                            }}
-                          />
-                          <div>
-                            <div className="font-semibold text-white">
-                              {c.prefix}{c.first_name} {c.last_name}
+                        {/* Photo & Name */}
+                        <td className="py-3 px-3">
+                          <div className="flex items-center space-x-3">
+                            <img
+                              src={c.image_url || '/images/placeholder.svg'}
+                              alt=""
+                              className="w-11 h-11 rounded-xl object-cover object-top border border-slate-700 shadow"
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src = '/images/placeholder.svg';
+                              }}
+                            />
+                            <div>
+                              <div className="font-bold text-white text-sm">
+                                {c.prefix}{c.first_name} {c.last_name}
+                              </div>
+                              <div className="text-[11px] text-slate-400 md:hidden truncate max-w-[140px]">
+                                {c.school}
+                              </div>
+                              {round === 1 && isQualified && (
+                                <span className="inline-block mt-0.5 text-[10px] text-amber-300 font-bold bg-amber-500/20 px-1.5 py-0.2 rounded border border-amber-500/30">
+                                  ผ่านเข้ารอบ ๒
+                                </span>
+                              )}
                             </div>
-                            {round === 1 && isQualified && (
-                              <span className="inline-block mt-0.5 text-[10px] text-amber-300 font-medium bg-amber-500/20 px-1.5 py-0.2 rounded border border-amber-500/30">
-                                ผ่านเข้ารอบ ๒
+                          </div>
+                        </td>
+
+                        {/* School */}
+                        <td className="py-3 px-3 text-xs text-slate-300 max-w-[170px] truncate hidden md:table-cell">
+                          {c.school}
+                        </td>
+
+                        {/* 3 Judges Columns (Click to View / Edit) */}
+                        {judges.map((j) => {
+                          const scoreData = c.judge_scores?.[j.id];
+                          return (
+                            <td key={j.id} className="py-3 px-2 text-center">
+                              {scoreData ? (
+                                <button
+                                  onClick={() => handleOpenEditScore(c, j.id)}
+                                  className="group px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-amber-500 text-slate-200 hover:text-slate-950 text-xs font-bold border border-slate-700/60 hover:border-amber-400 transition-all shadow-sm flex items-center justify-center gap-1 mx-auto"
+                                  title={`คลิกเพื่อแก้ไขคะแนนของ ${j.name}`}
+                                >
+                                  <span>{scoreData.total}</span>
+                                  <Edit3 className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleOpenEditScore(c, j.id)}
+                                  className="text-slate-500 hover:text-amber-400 text-xs underline decoration-dotted transition-colors"
+                                  title="ยังไม่มีคะแนน คลิกเพื่อใส่คะแนน"
+                                >
+                                  รอลงคะแนน
+                                </button>
+                              )}
+                            </td>
+                          );
+                        })}
+
+                        {/* Total Sum */}
+                        <td className="py-3 px-3 text-center bg-slate-950/40">
+                          <span className="font-black text-amber-300 text-sm">
+                            {c.total_sum}
+                          </span>
+                        </td>
+
+                        {/* Average Score (Divided by 3) */}
+                        <td className="py-3 px-3 text-center bg-slate-950/40">
+                          <span className="font-black text-emerald-400 text-base">
+                            {c.average_score}
+                          </span>
+                        </td>
+
+                        {/* Direct Edit Button */}
+                        <td className="py-3 px-3 text-center">
+                          <button
+                            onClick={() => handleOpenEditScore(c, 1)}
+                            className="px-2.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/40 text-xs font-bold flex items-center gap-1 mx-auto transition-all shadow-sm"
+                            title="แก้ไขคะแนนผู้เข้าประกวดท่านนี้"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span>แก้ไขคะแนน</span>
+                          </button>
+                        </td>
+
+                        {/* Badges / Awards */}
+                        <td className="py-3 px-3 text-center">
+                          <div className="flex flex-wrap items-center justify-center gap-1">
+                            {rank1 && (
+                              <span className="px-2 py-0.5 text-[10px] font-bold rounded-lg bg-amber-400 text-slate-950 border border-amber-300 flex items-center gap-1 shadow">
+                                👑 ชนะเลิศ
+                              </span>
+                            )}
+                            {rank2 && (
+                              <span className="px-2 py-0.5 text-[10px] font-bold rounded-lg bg-slate-300 text-slate-950 border border-slate-200">
+                                🥈 รองอันดับ ๑
+                              </span>
+                            )}
+                            {rank3 && (
+                              <span className="px-2 py-0.5 text-[10px] font-bold rounded-lg bg-amber-700 text-white border border-amber-600">
+                                🥉 รองอันดับ ๒
+                              </span>
+                            )}
+                            {c.award_costume === 1 && (
+                              <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                                แต่งกายงาม
+                              </span>
+                            )}
+                            {c.award_popular === 1 && (
+                              <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                                ขวัญใจ มทร.กรุงเทพ
+                              </span>
+                            )}
+                            {round === 1 && !isQualified && isTop6 && (
+                              <span className="px-2 py-0.5 text-[10px] text-slate-400 border border-slate-700 rounded-lg">
+                                Top 6
                               </span>
                             )}
                           </div>
-                        </div>
-                      </td>
-
-                      {/* School */}
-                      <td className="py-3 px-3 text-xs text-slate-300 max-w-[160px] truncate">
-                        {c.school}
-                      </td>
-
-                      {/* 3 Judges Columns */}
-                      {judges.map((j) => {
-                        const scoreData = c.judge_scores[j.id];
-                        return (
-                          <td key={j.id} className="py-3 px-2 text-center">
-                            {scoreData ? (
-                              <button
-                                onClick={() => setSelectedScoreDetail({
-                                  contestant: c,
-                                  judge: j,
-                                  score: scoreData.details
-                                })}
-                                className="group px-2.5 py-1 rounded bg-slate-800/80 hover:bg-amber-500 hover:text-slate-950 text-slate-200 text-xs font-semibold border border-slate-700/60 hover:border-amber-400 transition-all shadow-sm"
-                                title="คลิกเพื่อดูเกณฑ์ย่อยของกรรมการท่านนี้"
-                              >
-                                <span>{scoreData.total}</span>
-                              </button>
-                            ) : (
-                              <span className="text-slate-600 text-xs">รอลงคะแนน</span>
-                            )}
-                          </td>
-                        );
-                      })}
-
-                      {/* Total Sum */}
-                      <td className="py-3 px-3 text-center bg-slate-950/40">
-                        <span className="font-black text-amber-300 text-sm">
-                          {c.total_sum}
-                        </span>
-                      </td>
-
-                      {/* Average Score (Divided by 3) */}
-                      <td className="py-3 px-3 text-center bg-slate-950/40">
-                        <span className="font-black text-emerald-400 text-base">
-                          {c.average_score}
-                        </span>
-                      </td>
-
-                      {/* Badges / Awards */}
-                      <td className="py-3 px-3 text-center">
-                        <div className="flex flex-wrap items-center justify-center gap-1">
-                          {rank1 && (
-                            <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-amber-400 text-slate-950 border border-amber-300 flex items-center gap-1 shadow">
-                              👑 ชนะเลิศ
-                            </span>
-                          )}
-                          {rank2 && (
-                            <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-300 text-slate-950 border border-slate-200">
-                              🥈 รองอันดับ ๑
-                            </span>
-                          )}
-                          {rank3 && (
-                            <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-amber-700 text-white border border-amber-600">
-                              🥉 รองอันดับ ๒
-                            </span>
-                          )}
-                          {c.award_costume === 1 && (
-                            <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-500/20 text-purple-300 border border-purple-500/40">
-                              แต่งกายงาม
-                            </span>
-                          )}
-                          {c.award_popular === 1 && (
-                            <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">
-                              ขวัญใจ มทร.กรุงเทพ
-                            </span>
-                          )}
-                          {round === 1 && !isQualified && isTop6 && (
-                            <span className="px-2 py-0.5 text-[10px] text-slate-400 border border-slate-700 rounded">
-                              Top 6
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
@@ -512,7 +785,7 @@ export default function AdminDashboard({
           <div className="overflow-x-auto">
             <table className="w-full text-center border-collapse text-xs">
               <thead>
-                <tr className="bg-slate-950/90 text-slate-300 border-b border-slate-800">
+                <tr className="bg-slate-950/95 text-slate-300 border-b border-slate-800">
                   <th className="py-3 px-2 w-10">อันดับ</th>
                   <th className="py-3 px-2 w-12">หมายเลข</th>
                   <th className="py-3 px-3 text-left">ผู้เข้าประกวด</th>
@@ -541,42 +814,52 @@ export default function AdminDashboard({
                   <th className="py-3 px-3 font-bold text-emerald-400 bg-slate-950/60">
                     รวมคะแนนเฉลี่ย (๑๐๐)
                   </th>
+                  <th className="py-3 px-2">แก้ไข</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/80">
-                {contestants.map((c) => {
+                {filteredContestants.map((c) => {
                   const ca = c.criteria_averages || {};
                   return (
                     <tr key={c.id} className="hover:bg-slate-800/40">
                       <td className="py-2.5 px-2 font-semibold text-slate-300">{c.rank}</td>
                       <td className="py-2.5 px-2 font-mono font-bold text-amber-400">#{c.number}</td>
-                      <td className="py-2.5 px-3 text-left font-medium text-white truncate max-w-[150px]">
+                      <td className="py-2.5 px-3 text-left font-bold text-white truncate max-w-[150px]">
                         {c.prefix}{c.first_name} {c.last_name}
                       </td>
                       {round === 1 ? (
                         <>
-                          <td className="py-2.5 px-2">{ca.c_dress_accuracy ?? '-'}</td>
-                          <td className="py-2.5 px-2">{ca.c_hair ?? '-'}</td>
-                          <td className="py-2.5 px-2">{ca.c_shoes ?? '-'}</td>
-                          <td className="py-2.5 px-2">{ca.c_walk ?? '-'}</td>
-                          <td className="py-2.5 px-2">{ca.c_stand ?? '-'}</td>
-                          <td className="py-2.5 px-2">{ca.c_elegance ?? '-'}</td>
-                          <td className="py-2.5 px-2">{ca.c_voice ?? '-'}</td>
-                          <td className="py-2.5 px-2">{ca.c_face_symmetry ?? '-'}</td>
-                          <td className="py-2.5 px-2">{ca.c_wai ?? '-'}</td>
+                          <td className="py-2.5 px-2 font-semibold">{ca.c_dress_accuracy ?? '-'}</td>
+                          <td className="py-2.5 px-2 font-semibold">{ca.c_hair ?? '-'}</td>
+                          <td className="py-2.5 px-2 font-semibold">{ca.c_shoes ?? '-'}</td>
+                          <td className="py-2.5 px-2 font-semibold">{ca.c_walk ?? '-'}</td>
+                          <td className="py-2.5 px-2 font-semibold">{ca.c_stand ?? '-'}</td>
+                          <td className="py-2.5 px-2 font-semibold">{ca.c_elegance ?? '-'}</td>
+                          <td className="py-2.5 px-2 font-semibold">{ca.c_voice ?? '-'}</td>
+                          <td className="py-2.5 px-2 font-semibold">{ca.c_face_symmetry ?? '-'}</td>
+                          <td className="py-2.5 px-2 font-semibold">{ca.c_wai ?? '-'}</td>
                         </>
                       ) : (
                         <>
-                          <td className="py-2.5 px-2">{ca.c_r2_walk ?? '-'}</td>
-                          <td className="py-2.5 px-2">{ca.c_r2_stand ?? '-'}</td>
-                          <td className="py-2.5 px-2">{ca.c_r2_wai ?? '-'}</td>
-                          <td className="py-2.5 px-2">{ca.c_r2_situation ?? '-'}</td>
-                          <td className="py-2.5 px-2">{ca.c_r2_knowledge ?? '-'}</td>
-                          <td className="py-2.5 px-2">{ca.c_r2_relevance ?? '-'}</td>
+                          <td className="py-2.5 px-2 font-semibold">{ca.c_r2_walk ?? '-'}</td>
+                          <td className="py-2.5 px-2 font-semibold">{ca.c_r2_stand ?? '-'}</td>
+                          <td className="py-2.5 px-2 font-semibold">{ca.c_r2_wai ?? '-'}</td>
+                          <td className="py-2.5 px-2 font-semibold">{ca.c_r2_situation ?? '-'}</td>
+                          <td className="py-2.5 px-2 font-semibold">{ca.c_r2_knowledge ?? '-'}</td>
+                          <td className="py-2.5 px-2 font-semibold">{ca.c_r2_relevance ?? '-'}</td>
                         </>
                       )}
-                      <td className="py-2.5 px-3 font-bold text-emerald-400 bg-slate-950/60 text-sm">
+                      <td className="py-2.5 px-3 font-black text-emerald-400 bg-slate-950/60 text-sm">
                         {c.average_score}
+                      </td>
+                      <td className="py-2.5 px-2">
+                        <button
+                          onClick={() => handleOpenEditScore(c, 1)}
+                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-amber-500 text-slate-300 hover:text-slate-950 transition-colors"
+                          title="แก้ไขคะแนน"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
                       </td>
                     </tr>
                   );
@@ -586,6 +869,596 @@ export default function AdminDashboard({
           </div>
         )}
       </div>
+
+      {/* ================= MODAL: ADMIN DIRECT SCORE EDITOR ================= */}
+      {editingScore && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
+          <div className="bg-slate-900 border border-amber-500/40 rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl animate-in zoom-in-95 my-auto">
+            {/* Header */}
+            <div className="flex items-start justify-between pb-4 border-b border-slate-800">
+              <div className="flex items-center space-x-3">
+                <img
+                  src={editingScore.contestant.image_url || '/images/placeholder.svg'}
+                  alt=""
+                  className="w-12 h-12 rounded-2xl object-cover object-top border-2 border-amber-400/50 shadow"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = '/images/placeholder.svg';
+                  }}
+                />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-bold text-xs text-amber-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-700">
+                      #{String(editingScore.contestant.number).padStart(2, '0')}
+                    </span>
+                    <span className="text-xs text-amber-300/80">
+                      {category === 'WOMEN' ? 'นางนพมาศ' : 'เทพบุตร'} รอบที่ {round}
+                    </span>
+                  </div>
+                  <h3 className="text-base sm:text-lg font-bold text-white mt-0.5">
+                    {editingScore.contestant.prefix}{editingScore.contestant.first_name} {editingScore.contestant.last_name}
+                  </h3>
+                  <p className="text-xs text-slate-400 truncate max-w-xs sm:max-w-md">
+                    {editingScore.contestant.school}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setEditingScore(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Success Message Banner */}
+            {editingScore.successMsg && (
+              <div className="mt-3 bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 text-xs p-3 rounded-xl flex items-center gap-2 animate-in fade-in">
+                <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                <span>{editingScore.successMsg}</span>
+              </div>
+            )}
+
+            {/* Select Judge Tabs */}
+            <div className="mt-4">
+              <label className="block text-xs font-semibold text-slate-300 mb-2">
+                เลือกกรรมการที่ต้องการแก้ไขคะแนน:
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {[1, 2, 3].map((num) => {
+                  const isSelected = editingScore.judgeId === num;
+                  const currentScore = editingScore.contestant.judge_scores?.[num]?.total;
+                  return (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => handleSwitchJudgeInEdit(num)}
+                      className={`p-2.5 rounded-2xl border text-center transition-all ${
+                        isSelected
+                          ? 'bg-gradient-to-br from-amber-500/25 to-amber-600/10 border-amber-400 text-amber-300 font-bold shadow-lg shadow-amber-500/10'
+                          : 'bg-slate-950/70 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="text-[11px]">กรรมการท่านที่ {num === 1 ? '๑' : num === 2 ? '๒' : '๓'}</div>
+                      <div className="text-sm font-black text-amber-400 mt-0.5">
+                        {currentScore ? `${currentScore} คะแนน` : 'ยังไม่มีคะแนน'}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Live Total Score Display */}
+            <div className="mt-4 bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 flex items-center justify-between">
+              <div>
+                <span className="text-xs text-slate-400">คะแนนรวมของกรรมการท่านที่ {editingScore.judgeId}:</span>
+                <div className="text-xs text-slate-500">* คำนวณจากเกณฑ์ย่อยทั้งหมดอัตโนมัติ</div>
+              </div>
+              <div className="text-right">
+                <span className="text-2xl font-black text-amber-400">
+                  {calculateEditTotal()}
+                </span>
+                <span className="text-xs text-slate-400 font-semibold ml-1">/ 100</span>
+              </div>
+            </div>
+
+            {/* Criteria Sliders / Inputs */}
+            <div className="mt-4 max-h-[46vh] overflow-y-auto space-y-4 pr-1">
+              {round === 1 ? (
+                <>
+                  {/* Category 1 */}
+                  <div className="bg-slate-950/50 p-3.5 rounded-2xl border border-slate-800/80 space-y-3">
+                    <div className="text-xs font-bold text-amber-300">
+                      หมวดที่ ๑: การแต่งกาย ({isWomen ? '๓๐' : '๓๐'} คะแนน)
+                    </div>
+
+                    {/* Dress Accuracy */}
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-300 font-medium">ความถูกต้องของชุด ({isWomen ? '๑๕' : '๒๐'} คะแนน)</span>
+                        <span className="font-bold text-amber-400">{editingScore.scores.c_dress_accuracy ?? 0}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="0"
+                          max={isWomen ? 15 : 20}
+                          step="0.5"
+                          value={editingScore.scores.c_dress_accuracy ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_dress_accuracy', e.target.value, isWomen ? 15 : 20)}
+                          className="flex-1 accent-amber-500 cursor-pointer"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          max={isWomen ? 15 : 20}
+                          step="0.5"
+                          value={editingScore.scores.c_dress_accuracy ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_dress_accuracy', e.target.value, isWomen ? 15 : 20)}
+                          className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center text-white font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Hair */}
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-300 font-medium">ทรงผม ({isWomen ? '๑๐' : '๕'} คะแนน)</span>
+                        <span className="font-bold text-amber-400">{editingScore.scores.c_hair ?? 0}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="0"
+                          max={isWomen ? 10 : 5}
+                          step="0.5"
+                          value={editingScore.scores.c_hair ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_hair', e.target.value, isWomen ? 10 : 5)}
+                          className="flex-1 accent-amber-500 cursor-pointer"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          max={isWomen ? 10 : 5}
+                          step="0.5"
+                          value={editingScore.scores.c_hair ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_hair', e.target.value, isWomen ? 10 : 5)}
+                          className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center text-white font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Shoes */}
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-300 font-medium">รองเท้า (๕ คะแนน)</span>
+                        <span className="font-bold text-amber-400">{editingScore.scores.c_shoes ?? 0}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="0"
+                          max="5"
+                          step="0.5"
+                          value={editingScore.scores.c_shoes ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_shoes', e.target.value, 5)}
+                          className="flex-1 accent-amber-500 cursor-pointer"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          max="5"
+                          step="0.5"
+                          value={editingScore.scores.c_shoes ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_shoes', e.target.value, 5)}
+                          className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center text-white font-bold"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Category 2 */}
+                  <div className="bg-slate-950/50 p-3.5 rounded-2xl border border-slate-800/80 space-y-3">
+                    <div className="text-xs font-bold text-amber-300">
+                      หมวดที่ ๒: บุคลิกภาพ ({isWomen ? '๓๐' : '๓๐'} คะแนน)
+                    </div>
+
+                    {/* Walk */}
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-300 font-medium">การเดิน (๕ คะแนน)</span>
+                        <span className="font-bold text-amber-400">{editingScore.scores.c_walk ?? 0}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="0"
+                          max="5"
+                          step="0.5"
+                          value={editingScore.scores.c_walk ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_walk', e.target.value, 5)}
+                          className="flex-1 accent-amber-500 cursor-pointer"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          max="5"
+                          step="0.5"
+                          value={editingScore.scores.c_walk ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_walk', e.target.value, 5)}
+                          className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center text-white font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Stand */}
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-300 font-medium">การยืน (๕ คะแนน)</span>
+                        <span className="font-bold text-amber-400">{editingScore.scores.c_stand ?? 0}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="0"
+                          max="5"
+                          step="0.5"
+                          value={editingScore.scores.c_stand ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_stand', e.target.value, 5)}
+                          className="flex-1 accent-amber-500 cursor-pointer"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          max="5"
+                          step="0.5"
+                          value={editingScore.scores.c_stand ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_stand', e.target.value, 5)}
+                          className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center text-white font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Elegance */}
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-300 font-medium">ความสง่างาม (๑๕ คะแนน)</span>
+                        <span className="font-bold text-amber-400">{editingScore.scores.c_elegance ?? 0}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="0"
+                          max="15"
+                          step="0.5"
+                          value={editingScore.scores.c_elegance ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_elegance', e.target.value, 15)}
+                          className="flex-1 accent-amber-500 cursor-pointer"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          max="15"
+                          step="0.5"
+                          value={editingScore.scores.c_elegance ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_elegance', e.target.value, 15)}
+                          className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center text-white font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Voice */}
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-300 font-medium">น้ำเสียง (๕ คะแนน)</span>
+                        <span className="font-bold text-amber-400">{editingScore.scores.c_voice ?? 0}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="0"
+                          max="5"
+                          step="0.5"
+                          value={editingScore.scores.c_voice ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_voice', e.target.value, 5)}
+                          className="flex-1 accent-amber-500 cursor-pointer"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          max="5"
+                          step="0.5"
+                          value={editingScore.scores.c_voice ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_voice', e.target.value, 5)}
+                          className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center text-white font-bold"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Category 3 */}
+                  <div className="bg-slate-950/50 p-3.5 rounded-2xl border border-slate-800/80 space-y-3">
+                    <div className="text-xs font-bold text-amber-300">
+                      หมวดที่ ๓: ความงามของใบหน้า / กิริยามารยาท (๔๐ คะแนน)
+                    </div>
+
+                    {/* Face Symmetry */}
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-300 font-medium">ใบหน้าสมส่วน (๓๐ คะแนน)</span>
+                        <span className="font-bold text-amber-400">{editingScore.scores.c_face_symmetry ?? 0}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="0"
+                          max="30"
+                          step="0.5"
+                          value={editingScore.scores.c_face_symmetry ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_face_symmetry', e.target.value, 30)}
+                          className="flex-1 accent-amber-500 cursor-pointer"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          max="30"
+                          step="0.5"
+                          value={editingScore.scores.c_face_symmetry ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_face_symmetry', e.target.value, 30)}
+                          className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center text-white font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Wai */}
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-300 font-medium">การไหว้ (๑๐ คะแนน)</span>
+                        <span className="font-bold text-amber-400">{editingScore.scores.c_wai ?? 0}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="0"
+                          max="10"
+                          step="0.5"
+                          value={editingScore.scores.c_wai ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_wai', e.target.value, 10)}
+                          className="flex-1 accent-amber-500 cursor-pointer"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          max="10"
+                          step="0.5"
+                          value={editingScore.scores.c_wai ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_wai', e.target.value, 10)}
+                          className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center text-white font-bold"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Round 2 Criteria */}
+                  <div className="bg-slate-950/50 p-3.5 rounded-2xl border border-slate-800/80 space-y-3">
+                    <div className="text-xs font-bold text-amber-300">
+                      หมวดที่ ๑: รูปร่าง / บุคลิกภาพ (๓๐ คะแนน)
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-300 font-medium">การเดิน (๑๐ คะแนน)</span>
+                        <span className="font-bold text-amber-400">{editingScore.scores.c_r2_walk ?? 0}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="0"
+                          max="10"
+                          step="0.5"
+                          value={editingScore.scores.c_r2_walk ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_r2_walk', e.target.value, 10)}
+                          className="flex-1 accent-amber-500 cursor-pointer"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          max="10"
+                          step="0.5"
+                          value={editingScore.scores.c_r2_walk ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_r2_walk', e.target.value, 10)}
+                          className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center text-white font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-300 font-medium">การยืน (๑๐ คะแนน)</span>
+                        <span className="font-bold text-amber-400">{editingScore.scores.c_r2_stand ?? 0}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="0"
+                          max="10"
+                          step="0.5"
+                          value={editingScore.scores.c_r2_stand ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_r2_stand', e.target.value, 10)}
+                          className="flex-1 accent-amber-500 cursor-pointer"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          max="10"
+                          step="0.5"
+                          value={editingScore.scores.c_r2_stand ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_r2_stand', e.target.value, 10)}
+                          className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center text-white font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-300 font-medium">การไหว้ (๑๐ คะแนน)</span>
+                        <span className="font-bold text-amber-400">{editingScore.scores.c_r2_wai ?? 0}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="0"
+                          max="10"
+                          step="0.5"
+                          value={editingScore.scores.c_r2_wai ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_r2_wai', e.target.value, 10)}
+                          className="flex-1 accent-amber-500 cursor-pointer"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          max="10"
+                          step="0.5"
+                          value={editingScore.scores.c_r2_wai ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_r2_wai', e.target.value, 10)}
+                          className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center text-white font-bold"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Round 2 Q&A */}
+                  <div className="bg-slate-950/50 p-3.5 rounded-2xl border border-slate-800/80 space-y-3">
+                    <div className="text-xs font-bold text-amber-300">
+                      หมวดที่ ๒: ไหวพริบ & การตอบคำถาม (๗๐ คะแนน)
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-300 font-medium">การเชื่อมโยงกับสถานการณ์ (๒๐ คะแนน)</span>
+                        <span className="font-bold text-amber-400">{editingScore.scores.c_r2_situation ?? 0}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="0"
+                          max="20"
+                          step="0.5"
+                          value={editingScore.scores.c_r2_situation ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_r2_situation', e.target.value, 20)}
+                          className="flex-1 accent-amber-500 cursor-pointer"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          max="20"
+                          step="0.5"
+                          value={editingScore.scores.c_r2_situation ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_r2_situation', e.target.value, 20)}
+                          className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center text-white font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-300 font-medium">มีความรู้ (๓๐ คะแนน)</span>
+                        <span className="font-bold text-amber-400">{editingScore.scores.c_r2_knowledge ?? 0}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="0"
+                          max="30"
+                          step="0.5"
+                          value={editingScore.scores.c_r2_knowledge ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_r2_knowledge', e.target.value, 30)}
+                          className="flex-1 accent-amber-500 cursor-pointer"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          max="30"
+                          step="0.5"
+                          value={editingScore.scores.c_r2_knowledge ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_r2_knowledge', e.target.value, 30)}
+                          className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center text-white font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-300 font-medium">ตอบตรงประเด็น (๒๐ คะแนน)</span>
+                        <span className="font-bold text-amber-400">{editingScore.scores.c_r2_relevance ?? 0}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="0"
+                          max="20"
+                          step="0.5"
+                          value={editingScore.scores.c_r2_relevance ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_r2_relevance', e.target.value, 20)}
+                          className="flex-1 accent-amber-500 cursor-pointer"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          max="20"
+                          step="0.5"
+                          value={editingScore.scores.c_r2_relevance ?? 0}
+                          onChange={(e) => handleScoreFieldChange('c_r2_relevance', e.target.value, 20)}
+                          className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center text-white font-bold"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Comment Field */}
+              <div className="bg-slate-950/50 p-3.5 rounded-2xl border border-slate-800/80">
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  ความเห็น / บันทึกเพิ่มเติมของกรรมการท่านนี้:
+                </label>
+                <textarea
+                  rows={2}
+                  value={editingScore.comment}
+                  onChange={(e) => setEditingScore({ ...editingScore, comment: e.target.value })}
+                  placeholder="ระบุข้อเสนอแนะหรือบันทึกของกรรมการ (ถ้ามี)..."
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setEditingScore(null)}
+                className="px-4 py-2.5 rounded-xl text-slate-300 hover:bg-slate-800 text-xs font-semibold transition-colors"
+              >
+                ปิดหน้าต่าง
+              </button>
+
+              <button
+                type="button"
+                disabled={editingScore.saving}
+                onClick={handleSaveScore}
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-bold text-xs sm:text-sm shadow-xl shadow-amber-500/20 flex items-center gap-2 transition-all hover:scale-[1.02]"
+              >
+                <Save className="w-4 h-4" />
+                <span>{editingScore.saving ? 'กำลังบันทึกคะแนน...' : `บันทึกคะแนน (กรรมการ ${editingScore.judgeId})`}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ================= MODAL: DETAILED CRITERIA BREAKDOWN ================= */}
       {selectedScoreDetail && (
@@ -717,12 +1590,25 @@ export default function AdminDashboard({
               )}
             </div>
 
-            <div className="pt-3 border-t border-slate-800 text-right">
+            <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
               <button
                 onClick={() => setSelectedScoreDetail(null)}
                 className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-xl"
               >
                 ปิดหน้าต่าง
+              </button>
+
+              <button
+                onClick={() => {
+                  const contestant = selectedScoreDetail.contestant;
+                  const judgeId = selectedScoreDetail.judge.id;
+                  setSelectedScoreDetail(null);
+                  handleOpenEditScore(contestant, judgeId);
+                }}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>แก้ไขคะแนนชุดนี้</span>
               </button>
             </div>
           </div>

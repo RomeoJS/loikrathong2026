@@ -99,13 +99,14 @@ export default function PrintReports({
       {/* ================= PRINT PREVIEW CONTAINER (Paper Sheet) ================= */}
       <div className="bg-white text-slate-950 p-8 sm:p-12 rounded-2xl shadow-2xl max-w-5xl mx-auto border border-slate-300 print:border-none print:shadow-none print:p-0 print:m-0 print:max-w-none">
         
-        {/* Document Header with Official RMUTK Logos */}
-        <div className="flex items-center justify-between border-b-2 border-slate-900 pb-3 mb-4">
-          <img
-            src="/images/header_logo.png"
-            alt="ตรามหาวิทยาลัยเทคโนโลยีราชมงคลกรุงเทพ"
-            className="h-16 w-full object-contain"
-          />
+        {/* Document Header (Logo removed as requested) */}
+        <div className="text-center border-b-2 border-slate-900 pb-3 mb-4">
+          <div className="font-bold text-lg text-slate-900 tracking-wide">
+            มหาวิทยาลัยเทคโนโลยีราชมงคลกรุงเทพ
+          </div>
+          <div className="text-xs text-slate-700 font-medium mt-0.5">
+            ระบบประมวลผลและตัดสินคะแนนการประกวดเทพบุตรและนางนพมาศ ประจำปี ๒๕๖๙
+          </div>
         </div>
 
         {/* ----------------- REPORT TYPE 1: ROUND 1 SCORE SHEET ----------------- */}
