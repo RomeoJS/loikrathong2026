@@ -68,7 +68,7 @@ export default function Header({
               </button>
             </div>
 
-            {/* Round Selector */}
+            {/* Round Selector (3 Stages) */}
             <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 shadow-inner">
               <button
                 onClick={() => setRound(1)}
@@ -77,8 +77,9 @@ export default function Header({
                     ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
+                title="รอบแรก: คัดเลือกผู้เข้าประกวด ๖ อันดับแรกเพื่อไปตอบคำถาม"
               >
-                รอบที่ ๑ (คัด ๖)
+                รอบที่ ๑ (คัด ๖ คนตอบคำถาม)
               </button>
               <button
                 onClick={() => setRound(2)}
@@ -87,8 +88,21 @@ export default function Header({
                     ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
+                title="รอบตอบคำถาม: คัดเลือกผู้ที่ได้คะแนนดีที่สุด ๓ คนเข้าสู่รอบเสี่ยงทาย"
               >
-                รอบที่ ๒ (ตัดสิน ๓)
+                รอบที่ ๒ (ตอบคำถาม - คัด ๓ คนเสี่ยงทาย)
+              </button>
+              <button
+                onClick={() => setRound(3)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 flex items-center gap-1 ${
+                  round === 3
+                    ? 'bg-gradient-to-r from-purple-500 to-amber-500 text-slate-950 font-bold shadow-md shadow-purple-500/20'
+                    : 'text-slate-400 hover:text-purple-300'
+                }`}
+                title="รอบเสี่ยงทาย: ๓ คนสุดท้ายทำการเสี่ยงทายบนเวทีเพื่อตัดสินรางวัลชนะเลิศ"
+              >
+                <span>🔮</span>
+                <span>รอบเสี่ยงทาย (๓ คนสุดท้าย)</span>
               </button>
             </div>
 

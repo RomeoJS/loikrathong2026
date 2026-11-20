@@ -66,7 +66,7 @@ export default function PrintReports({
                 reportType === 'r1_sheet' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'
               }`}
             >
-              ใบคะแนนรอบแรก
+              ใบคะแนนรอบแรก (คัด ๖ คนตอบคำถาม)
             </button>
             <button
               onClick={() => setReportType('r2_sheet')}
@@ -74,7 +74,7 @@ export default function PrintReports({
                 reportType === 'r2_sheet' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'
               }`}
             >
-              ใบคะแนนรอบสอง (๖ คน)
+              ใบคะแนนรอบตอบคำถาม (คัด ๓ คนเสี่ยงทาย)
             </button>
             <button
               onClick={() => setReportType('award_sheet')}
@@ -82,7 +82,7 @@ export default function PrintReports({
                 reportType === 'award_sheet' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'
               }`}
             >
-              ใบประกาศผลรางวัล (๕ รางวัล)
+              ใบประกาศผลรอบเสี่ยงทาย & รางวัลชนะเลิศ
             </button>
           </div>
 
@@ -178,6 +178,10 @@ export default function PrintReports({
               </tbody>
             </table>
 
+            <div className="mt-2 text-right text-[11px] font-semibold text-slate-800">
+              * หมายเหตุ: ผู้เข้าประกวด ๖ ลำดับแรกที่มีคะแนนรวมสูงสุด จะผ่านเข้าสู่รอบที่ ๒ (รอบตอบคำถาม)
+            </div>
+
             {/* 3 Judges Signature Lines */}
             <div className="mt-10 pt-4">
               <div className="grid grid-cols-3 gap-6 text-center text-xs">
@@ -201,7 +205,7 @@ export default function PrintReports({
                 รายชื่อผู้เข้าประกวด{categoryTitle} ราชมงคลกรุงเทพ ประจำปี ๒๕๖๙
               </h3>
               <p className="text-sm font-semibold text-slate-800">
-                รอบสอง วันที่ ๒๔ พฤศจิกายน ๒๕๖๙ (คะแนนเฉลี่ยจากกรรมการ ๓ ท่าน)
+                รอบสอง (รอบตอบคำถาม) คัดเลือก ๓ คนที่ดีที่สุดเข้าสู่รอบเสี่ยงทาย (คะแนนเฉลี่ยจากกรรมการ ๓ ท่าน)
               </p>
               <p className="text-xs text-slate-700">
                 ณ เวทีกลางสำนักงานอธิการบดี มหาวิทยาลัยเทคโนโลยีราชมงคลกรุงเทพ
@@ -257,6 +261,10 @@ export default function PrintReports({
                 })}
               </tbody>
             </table>
+
+            <div className="mt-2 text-right text-[11px] font-semibold text-slate-800">
+              * หมายเหตุ: ผู้เข้าประกวด ๓ ลำดับแรกที่มีคะแนนรวมสูงสุด จะผ่านเข้าสู่ "รอบเสี่ยงทาย" เพื่อตัดสินรางวัลชนะเลิศบนเวที
+            </div>
 
             {/* 3 Judges Signature Lines */}
             <div className="mt-10 pt-4">
@@ -347,6 +355,10 @@ export default function PrintReports({
                 </tr>
               </tbody>
             </table>
+
+            <div className="mt-2 text-right text-[11px] font-semibold text-slate-800">
+              * หมายเหตุ: รางวัลชนะเลิศ, รองอันดับ ๑ และ รองอันดับ ๒ ตัดสินจากผลการเสี่ยงทายของ ๓ คนสุดท้ายบนเวที
+            </div>
 
             {/* 3 Judges Signature Lines */}
             <div className="mt-12 pt-6">

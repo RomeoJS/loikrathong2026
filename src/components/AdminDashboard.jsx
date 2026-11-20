@@ -448,45 +448,102 @@ export default function AdminDashboard({
             <h2 className="text-xl sm:text-2xl font-black text-white mt-1.5 flex items-center gap-2.5">
               <Trophy className="w-6 h-6 text-amber-400 drop-shadow" />
               <span>
-                ตารางสรุปคะแนนและจัดการอันดับ รอบที่ {round === 1 ? '๑ (คัดเหลือ ๖ คน)' : '๒ (ชิงชนะเลิศ)'}
+                {round === 1
+                  ? 'ตารางสรุปคะแนน รอบที่ ๑ (คัดเหลือ ๖ คน เพื่อไปตอบคำถาม)'
+                  : round === 2
+                    ? 'ตารางสรุปคะแนน รอบที่ ๒ (ตอบคำถาม - คัดคะแนนดีที่สุด ๓ คน เข้ารอบเสี่ยงทาย)'
+                    : 'รอบที่ ๓: รอบเสี่ยงทาย & ประกาศผลรางวัลชนะเลิศ (๓ คนสุดท้าย)'}
               </span>
             </h2>
 
             <p className="text-xs text-amber-200/80 mt-1 flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>เกณฑ์การคำนวณ: รวมคะแนนของกรรมการทั้ง ๓ ท่านในแต่ละช่องเกณฑ์แล้วหาร ๓ (แอดมินสามารถคลิกแก้ไขคะแนนได้โดยตรง)</span>
+              <span>
+                {round === 1
+                  ? 'ผู้เข้าประกวด ๖ อันดับแรกที่มีคะแนนเฉลี่ยสูงสุด จะผ่านเข้าสู่ "รอบตอบคำถาม" อัตโนมัติ (ไม่ต้องรอแอดมินยืนยัน)'
+                  : round === 2
+                    ? 'เมื่อกรรมการลงคะแนนตอบคำถามเสร็จ ระบบจะนำผู้ที่ได้คะแนนดีที่สุด ๓ คน เข้ารอบเสี่ยงทายอัตโนมัติ'
+                    : 'ผู้ผ่านเข้ารอบเสี่ยงทาย ๓ คนสุดท้ายทำการเสี่ยงทายบนเวที เพื่อตัดสินรางวัลชนะเลิศ, รองอันดับ ๑, และรองอันดับ ๒'}
+              </span>
             </p>
           </div>
 
           {/* Action Buttons */}
           <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
-            {round === 1 ? (
-              <button
-                onClick={handleOpenQualifyModal}
-                disabled={actionLoading}
-                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-bold text-xs sm:text-sm shadow-xl shadow-amber-500/20 flex items-center gap-2 transition-all hover:scale-[1.02]"
-              >
-                <Crown className="w-4 h-4" />
-                <span>คัดเลือก ๖ คนเข้ารอบ ๒</span>
-              </button>
-            ) : (
+            {round === 1 && (
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setRound(2);
+                    fetch('/api/settings', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ key: 'active_round', value: 2 })
+                    }).catch(console.error);
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-bold text-xs sm:text-sm shadow-xl shadow-amber-500/20 flex items-center gap-2 transition-all hover:scale-[1.02]"
+                >
+                  <span>ไปรอบตอบคำถาม (รอบ ๒)</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
                 <button
                   onClick={handleOpenQualifyModal}
                   disabled={actionLoading}
-                  className="px-3.5 py-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
-                  title="ดูหรือปรับเปลี่ยนรายชื่อ ๖ คนที่ผ่านเข้ารอบ ๒"
+                  className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  title="ปรับเปลี่ยนรายชื่อ ๖ คนที่ผ่านเข้ารอบด้วยตนเอง (กรณีมีคะแนนเท่ากัน)"
                 >
                   <Crown className="w-3.5 h-3.5" />
-                  <span>ปรับเปลี่ยน ๖ คนเข้ารอบ ๒</span>
+                  <span>ปรับเปลี่ยน ๖ คน</span>
+                </button>
+              </div>
+            )}
+
+            {round === 2 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setRound(3);
+                    fetch('/api/settings', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ key: 'active_round', value: 3 })
+                    }).catch(console.error);
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 via-purple-600 to-amber-500 hover:from-purple-400 hover:to-amber-400 text-white font-bold text-xs sm:text-sm shadow-xl shadow-purple-500/20 flex items-center gap-2 transition-all hover:scale-[1.02]"
+                >
+                  <span>🔮</span>
+                  <span>ไปรอบเสี่ยงทาย (๓ คน)</span>
+                  <ChevronRight className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setShowAwardModal(true)}
                   disabled={actionLoading}
-                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-bold text-xs sm:text-sm shadow-xl shadow-amber-500/20 flex items-center gap-2 transition-all hover:scale-[1.02]"
+                  className="px-3.5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs sm:text-sm shadow-lg shadow-amber-500/20 flex items-center gap-1.5 transition-all"
                 >
                   <Trophy className="w-4 h-4" />
-                  <span>สรุปผลรางวัล & ชนะเลิศ</span>
+                  <span>สรุปรางวัล</span>
+                </button>
+                <button
+                  onClick={handleOpenQualifyModal}
+                  disabled={actionLoading}
+                  className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  title="ปรับเปลี่ยนผู้เข้ารอบ ๖ คน"
+                >
+                  <Crown className="w-3.5 h-3.5 text-amber-400" />
+                  <span>ปรับ ๖ คน</span>
+                </button>
+              </div>
+            )}
+
+            {round === 3 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowAwardModal(true)}
+                  disabled={actionLoading}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-bold text-xs sm:text-sm shadow-xl shadow-amber-500/20 flex items-center gap-2 transition-all hover:scale-[1.02]"
+                >
+                  <Trophy className="w-4 h-4" />
+                  <span>บันทึกผลการเสี่ยงทาย & มอบรางวัล</span>
                 </button>
               </div>
             )}
@@ -498,7 +555,7 @@ export default function AdminDashboard({
               className="px-3.5 py-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>จำลองคะแนน (๓ ท่าน)</span>
+              <span>{round === 3 ? 'จำลองผลเสี่ยงทาย' : 'จำลองคะแนน (๓ ท่าน)'}</span>
             </button>
 
             <button
@@ -532,21 +589,33 @@ export default function AdminDashboard({
             <div className="text-xl font-black text-amber-400 mt-0.5">๓ ท่าน</div>
           </div>
           <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800/80 backdrop-blur-sm">
-            <div className="text-[11px] font-medium text-slate-400">อันดับ ๑ ปัจจุบัน (คะแนนเฉลี่ย)</div>
+            <div className="text-[11px] font-medium text-slate-400">
+              {round === 1
+                ? 'อันดับ ๑ รอบแรก'
+                : round === 2
+                  ? 'อันดับ ๑ รอบตอบคำถาม'
+                  : 'คะแนนเสี่ยงทาย / ผู้ชนะ'}
+            </div>
             <div className="text-sm font-bold text-emerald-400 mt-1 truncate">
               {contestants[0] ? `#${contestants[0].number} ${contestants[0].first_name} (${contestants[0].average_score} คะแนน)` : '-'}
             </div>
           </div>
           <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800/80 backdrop-blur-sm">
             <div className="text-[11px] font-medium text-slate-400">
-              {round === 1 ? 'ผ่านเข้ารอบ ๒ แล้ว' : 'ผู้ชนะเลิศอันดับ ๑'}
+              {round === 1
+                ? 'ผ่านเข้ารอบตอบคำถาม'
+                : round === 2
+                  ? 'ผ่านเข้ารอบเสี่ยงทาย'
+                  : 'ผู้ชนะเลิศอันดับ ๑'}
             </div>
             <div className="text-sm font-bold text-amber-300 mt-1 truncate">
               {round === 1
                 ? `${contestants.filter(c => c.round1_qualified === 1).length} / 6 คน`
-                : contestants.find(c => c.round2_rank === 1)
-                  ? `#${contestants.find(c => c.round2_rank === 1).number} ${contestants.find(c => c.round2_rank === 1).first_name}`
-                  : 'ยังไม่ได้ระบุ'}
+                : round === 2
+                  ? `${summaryData?.top3_prophecy?.length || 0} / 3 คน`
+                  : contestants.find(c => c.round2_rank === 1)
+                    ? `#${contestants.find(c => c.round2_rank === 1).number} ${contestants.find(c => c.round2_rank === 1).first_name}`
+                    : 'ยังไม่ได้ระบุ'}
             </div>
           </div>
         </div>
@@ -628,9 +697,9 @@ export default function AdminDashboard({
             <Crown className="w-8 h-8" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-white">ยังไม่มีรายชื่อผู้ผ่านเข้ารอบที่ ๒</h3>
+            <h3 className="text-lg font-bold text-white">กำลังรอผลคะแนนรอบที่ ๑</h3>
             <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-md mx-auto">
-              ท่านสามารถดึง ๖ อันดับแรกที่มีคะแนนสูงสุดจากรอบที่ ๑ เข้าสู่รอบที่ ๒ ได้ทันที หรือเลือกผู้ผ่านเข้ารอบด้วยตนเอง
+              ระบบจะดึง ๖ อันดับแรกที่มีคะแนนสูงสุดจากรอบที่ ๑ เข้าสู่รอบตอบคำถามให้อัตโนมัติทันทีที่มีการลงคะแนน
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
@@ -640,7 +709,7 @@ export default function AdminDashboard({
               className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-bold text-xs sm:text-sm shadow-xl shadow-amber-500/20 flex items-center gap-2 transition-all hover:scale-[1.02]"
             >
               <Sparkles className="w-4 h-4" />
-              <span>ดึง ๖ อันดับแรกจากคะแนนรอบที่ ๑ อัตโนมัติ</span>
+              <span>ดึง ๖ อันดับแรกจากคะแนนรอบที่ ๑ ทันที</span>
             </button>
             <button
               onClick={handleOpenQualifyModal}
@@ -653,8 +722,164 @@ export default function AdminDashboard({
         </div>
       )}
 
+      {/* ================= TOP 3 FINALISTS FOR PROPHECY (ROUND 2 SHOWCASE) ================= */}
+      {round === 2 && summaryData?.top3_prophecy?.length > 0 && (
+        <div className="bg-gradient-to-r from-purple-950/85 via-slate-900 to-amber-950/85 border-2 border-purple-500/50 rounded-3xl p-6 sm:p-7 shadow-2xl relative overflow-hidden">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-purple-500/30">
+            <div>
+              <div className="flex items-center gap-2.5">
+                <span className="text-2xl animate-bounce">🔮</span>
+                <h3 className="text-lg sm:text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-200 via-amber-200 to-white">
+                  ผลคะแนนตอบคำถาม: ๓ คนสุดท้าย ผ่านเข้าสู่ "รอบเสี่ยงทาย"
+                </h3>
+              </div>
+              <p className="text-xs text-amber-200/80 mt-1">
+                * ระบบคัดเลือกผู้ที่ได้คะแนนตอบคำถามดีที่สุด ๓ อันดับแรกให้อัตโนมัติ เพื่อขึ้นเวทีทำการเสี่ยงทายชิงตำแหน่งชนะเลิศ
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                setRound(3);
+                fetch('/api/settings', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ key: 'active_round', value: 3 })
+                }).catch(console.error);
+              }}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 via-amber-500 to-amber-600 hover:from-purple-400 hover:to-amber-500 text-slate-950 font-black text-xs sm:text-sm shadow-xl shadow-amber-500/20 flex items-center gap-2 transition-all hover:scale-105 flex-shrink-0"
+            >
+              <span>🔮</span>
+              <span>เปิดเวทีรอบเสี่ยงทาย (๓ คนสุดท้าย)</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* 3 Finalists Podium Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5">
+            {summaryData.top3_prophecy.map((c, idx) => (
+              <div
+                key={c.id}
+                className="bg-slate-950/80 border border-purple-500/40 rounded-2xl p-4 flex items-center space-x-3.5 shadow-lg backdrop-blur-sm relative overflow-hidden"
+              >
+                <div className="w-16 h-20 rounded-xl overflow-hidden bg-slate-900 flex-shrink-0 border-2 border-purple-400/60 shadow">
+                  <img
+                    src={c.image_url || '/images/placeholder.svg'}
+                    alt={c.first_name}
+                    className="w-full h-full object-cover object-top"
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                      idx === 0 ? 'bg-amber-400 text-slate-950' : idx === 1 ? 'bg-slate-300 text-slate-950' : 'bg-amber-700 text-white'
+                    }`}>
+                      อันดับ {idx + 1}
+                    </span>
+                    <span className="text-[10px] text-purple-200 font-bold bg-purple-500/30 px-2 py-0.5 rounded-full border border-purple-400/40">
+                      ผ่านเข้ารอบเสี่ยงทาย
+                    </span>
+                  </div>
+                  <div className="font-bold text-white text-sm mt-1 truncate">
+                    #{c.number} {c.prefix}{c.first_name} {c.last_name}
+                  </div>
+                  <div className="text-[11px] text-slate-400 truncate">{c.school}</div>
+                  <div className="text-xs font-black text-amber-300 mt-1">
+                    คะแนนตอบคำถาม: {c.average_score} คะแนน
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ================= STAGE 3: PROPHECY CEREMONY & WINNERS PODIUM ================= */}
+      {round === 3 && (
+        <div className="space-y-6">
+          <div className="bg-gradient-to-br from-purple-950/90 via-slate-900 to-amber-950/90 border-2 border-amber-500/60 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+            <div className="text-center max-w-2xl mx-auto space-y-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-300 text-xs font-bold uppercase tracking-wider">
+                <span>🔮</span> รอบเสี่ยงทายบนเวที & สรุปรางวัลชนะเลิศ
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-black text-white">
+                ผู้ผ่านเข้ารอบเสี่ยงทาย ๓ คนสุดท้าย
+              </h2>
+              <p className="text-xs sm:text-sm text-amber-200/80">
+                ผู้เข้าประกวดทั้ง ๓ ท่านที่มีคะแนนตอบคำถามดีที่สุด ขึ้นเวทีทำการเสี่ยงทาย เพื่อจัดอันดับผู้ชนะเลิศ, รองอันดับ ๑ และรองอันดับ ๒
+              </p>
+            </div>
+
+            {/* 3 Finalists on Stage */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+              {(summaryData?.contestants || []).slice(0, 3).map((c, idx) => (
+                <div
+                  key={c.id}
+                  className="bg-slate-950/90 border-2 border-amber-500/40 hover:border-amber-400 rounded-3xl p-5 text-center shadow-xl flex flex-col items-center justify-between space-y-4 group transition-all"
+                >
+                  <div className="relative w-36 aspect-[3/4] rounded-2xl overflow-hidden border-2 border-amber-400 shadow-lg">
+                    <img
+                      src={c.image_url || '/images/placeholder.svg'}
+                      alt={c.first_name}
+                      className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute top-2 left-2 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-base px-2.5 py-0.5 rounded-lg shadow">
+                      #{String(c.number).padStart(2, '0')}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                      🔮 ผู้ผ่านเข้ารอบเสี่ยงทาย
+                    </span>
+                    <h3 className="text-base font-bold text-white mt-2">
+                      {c.prefix}{c.first_name} {c.last_name}
+                    </h3>
+                    <p className="text-xs text-amber-300/80 truncate mt-0.5">{c.school}</p>
+                    <div className="mt-2 text-xs font-semibold text-slate-400">
+                      คะแนนตอบคำถาม: <b className="text-amber-400">{c.average_score}</b> คะแนน
+                    </div>
+                  </div>
+
+                  {/* Award Status Badge if assigned */}
+                  {c.round2_rank === 1 && (
+                    <div className="w-full py-2 px-3 bg-amber-500/20 border border-amber-400 rounded-xl text-amber-300 font-bold text-xs flex items-center justify-center gap-1.5">
+                      <Crown className="w-4 h-4 text-amber-400" />
+                      <span>👑 รางวัลชนะเลิศ</span>
+                    </div>
+                  )}
+                  {c.round2_rank === 2 && (
+                    <div className="w-full py-2 px-3 bg-slate-400/20 border border-slate-300 rounded-xl text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5">
+                      <Medal className="w-4 h-4 text-slate-300" />
+                      <span>🥈 รางวัลรองอันดับ ๑</span>
+                    </div>
+                  )}
+                  {c.round2_rank === 3 && (
+                    <div className="w-full py-2 px-3 bg-amber-800/20 border border-amber-700 rounded-xl text-amber-400 font-bold text-xs flex items-center justify-center gap-1.5">
+                      <Medal className="w-4 h-4 text-amber-600" />
+                      <span>🥉 รางวัลรองอันดับ ๒</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Button to record awards */}
+            <div className="mt-8 pt-6 border-t border-slate-800 flex flex-wrap items-center justify-center gap-3">
+              <button
+                onClick={() => setShowAwardModal(true)}
+                className="px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-black text-sm shadow-xl shadow-amber-500/20 flex items-center gap-2 transition-all hover:scale-105"
+              >
+                <Trophy className="w-5 h-5" />
+                <span>บันทึกผลการเสี่ยงทาย & ประกาศผลรางวัล</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ================= Main Table: Scores Matrix & Controls ================= */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+      <div className={`bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl ${round === 3 ? 'hidden' : ''}`}>
         <div className="p-4 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Medal className="w-5 h-5 text-amber-400" />
@@ -767,8 +992,18 @@ export default function AdminDashboard({
                                 {c.school}
                               </div>
                               {round === 1 && isQualified && (
-                                <span className="inline-block mt-0.5 text-[10px] text-amber-300 font-bold bg-amber-500/20 px-1.5 py-0.2 rounded border border-amber-500/30">
-                                  ผ่านเข้ารอบ ๒
+                                <span className="inline-block mt-0.5 text-[10px] text-amber-300 font-bold bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30">
+                                  🌸 ผ่านเข้ารอบตอบคำถาม
+                                </span>
+                              )}
+                              {round === 2 && c.is_top3_prophecy && (
+                                <span className="inline-block mt-0.5 text-[10px] text-purple-200 font-bold bg-purple-500/30 px-2 py-0.5 rounded border border-purple-400/50 shadow-sm animate-pulse">
+                                  🔮 ผ่านเข้ารอบเสี่ยงทาย (๓ คนสุดท้าย)
+                                </span>
+                              )}
+                              {round === 2 && !c.is_top3_prophecy && c.average_score > 0 && (
+                                <span className="inline-block mt-0.5 text-[10px] text-slate-400 font-medium bg-slate-800/60 px-1.5 py-0.5 rounded">
+                                  อันดับ {c.rank} (ไม่ผ่านเข้ารอบเสี่ยงทาย)
                                 </span>
                               )}
                             </div>
@@ -859,6 +1094,12 @@ export default function AdminDashboard({
                             {c.award_popular === 1 && (
                               <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/40">
                                 ขวัญใจ มทร.กรุงเทพ
+                              </span>
+                            )}
+                            {round === 2 && c.is_top3_prophecy && (
+                              <span className="px-2 py-0.5 text-[10px] font-bold rounded-lg bg-gradient-to-r from-purple-500/20 to-amber-500/20 text-purple-200 border border-purple-400/40 shadow-sm flex items-center gap-1">
+                                <span>🔮</span>
+                                <span>เข้ารอบเสี่ยงทาย</span>
                               </span>
                             )}
                             {round === 1 && !isQualified && isTop6 && (
@@ -1814,10 +2055,10 @@ export default function AdminDashboard({
               <div>
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
                   <Trophy className="w-5 h-5 text-amber-400" />
-                  <span>ประกาศและบันทึกผลรางวัลอย่างเป็นทางการ</span>
+                  <span>บันทึกผลการเสี่ยงทาย & ประกาศผลรางวัล</span>
                 </h3>
                 <p className="text-xs text-slate-400">
-                  {category === 'WOMEN' ? 'การตัดสินนางนพมาศ' : 'การตัดสินเทพบุตร'} ประจำปี ๒๕๖๙
+                  {category === 'WOMEN' ? 'การประกวดนางนพมาศ' : 'การประกวดเทพบุตร'} ประจำปี ๒๕๖๙ (ตัดสินจาก ๓ คนสุดท้ายในรอบเสี่ยงทาย)
                 </p>
               </div>
               <button
@@ -1831,7 +2072,7 @@ export default function AdminDashboard({
             <div className="py-4 space-y-4 max-h-[60vh] overflow-y-auto text-xs">
               <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl">
                 <label className="block font-bold text-amber-300 mb-1">
-                  👑 รางวัลชนะเลิศ ({category === 'WOMEN' ? 'นางนพมาศ' : 'เทพบุตร'})
+                  👑 รางวัลชนะเลิศ ({category === 'WOMEN' ? 'นางนพมาศ' : 'เทพบุตร'}) - จาก ๓ คนสุดท้ายในรอบเสี่ยงทาย
                 </label>
                 <select
                   value={awardsForm.winner_id}
@@ -1839,9 +2080,9 @@ export default function AdminDashboard({
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-semibold"
                 >
                   <option value="">-- เลือกลำดับ --</option>
-                  {contestants.map(c => (
+                  {(summaryData?.top3_prophecy?.length > 0 ? summaryData.top3_prophecy : contestants).map(c => (
                     <option key={c.id} value={c.id}>
-                      #{c.number} {c.prefix}{c.first_name} {c.last_name} (คะแนนเฉลี่ย: {c.average_score})
+                      #{c.number} {c.prefix}{c.first_name} {c.last_name} {c.average_score ? `(คะแนนตอบคำถาม: ${c.average_score})` : ''}
                     </option>
                   ))}
                 </select>
@@ -1849,7 +2090,7 @@ export default function AdminDashboard({
 
               <div className="bg-slate-950/80 border border-slate-800 p-3 rounded-xl">
                 <label className="block font-bold text-slate-200 mb-1">
-                  🥈 รางวัลรองชนะเลิศ อันดับ ๑
+                  🥈 รางวัลรองชนะเลิศ อันดับ ๑ - จาก ๓ คนสุดท้ายในรอบเสี่ยงทาย
                 </label>
                 <select
                   value={awardsForm.runner_up_1_id}
@@ -1857,9 +2098,9 @@ export default function AdminDashboard({
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
                 >
                   <option value="">-- เลือกลำดับ --</option>
-                  {contestants.map(c => (
+                  {(summaryData?.top3_prophecy?.length > 0 ? summaryData.top3_prophecy : contestants).map(c => (
                     <option key={c.id} value={c.id}>
-                      #{c.number} {c.prefix}{c.first_name} {c.last_name} (คะแนนเฉลี่ย: {c.average_score})
+                      #{c.number} {c.prefix}{c.first_name} {c.last_name} {c.average_score ? `(คะแนนตอบคำถาม: ${c.average_score})` : ''}
                     </option>
                   ))}
                 </select>
@@ -1867,7 +2108,7 @@ export default function AdminDashboard({
 
               <div className="bg-slate-950/80 border border-slate-800 p-3 rounded-xl">
                 <label className="block font-bold text-slate-200 mb-1">
-                  🥉 รางวัลรองชนะเลิศ อันดับ ๒
+                  🥉 รางวัลรองชนะเลิศ อันดับ ๒ - จาก ๓ คนสุดท้ายในรอบเสี่ยงทาย
                 </label>
                 <select
                   value={awardsForm.runner_up_2_id}
@@ -1875,9 +2116,9 @@ export default function AdminDashboard({
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
                 >
                   <option value="">-- เลือกลำดับ --</option>
-                  {contestants.map(c => (
+                  {(summaryData?.top3_prophecy?.length > 0 ? summaryData.top3_prophecy : contestants).map(c => (
                     <option key={c.id} value={c.id}>
-                      #{c.number} {c.prefix}{c.first_name} {c.last_name} (คะแนนเฉลี่ย: {c.average_score})
+                      #{c.number} {c.prefix}{c.first_name} {c.last_name} {c.average_score ? `(คะแนนตอบคำถาม: ${c.average_score})` : ''}
                     </option>
                   ))}
                 </select>

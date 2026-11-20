@@ -202,7 +202,7 @@ export default function JudgeView({
                 >
                   <div className="truncate font-semibold">{j.name}</div>
                   <div className={`text-[10px] mt-0.5 ${isSelected ? 'text-slate-900 font-bold' : 'text-slate-400'}`}>
-                    {round === 1 ? `รอบ ๑: ${j.scored_r1 || 0}/15` : `รอบ ๒: ${j.scored_r2 || 0}/6`}
+                    {round === 1 ? `รอบ ๑: ${j.scored_r1 || 0}/15` : round === 2 ? `รอบ ๒: ${j.scored_r2 || 0}/6` : 'รอบเสี่ยงทาย'}
                   </div>
                 </button>
               );
@@ -238,11 +238,19 @@ export default function JudgeView({
           <h3 className="text-xl font-bold text-white flex items-center gap-2">
             <span>{category === 'WOMEN' ? '🌸 ผู้เข้าประกวดนางนพมาศ' : '👑 ผู้เข้าประกวดเทพบุตร'}</span>
             <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
-              {round === 1 ? 'รอบที่ ๑ (คัดเหลือ ๖ คน)' : 'รอบที่ ๒ (ตัดสินชิงชนะเลิศ)'}
+              {round === 1
+                ? 'รอบที่ ๑ (คัดเหลือ ๖ คน เพื่อไปตอบคำถาม)'
+                : round === 2
+                  ? 'รอบที่ ๒ (ตอบคำถาม - คัดคะแนนดีที่สุด ๓ คน เข้ารอบเสี่ยงทาย)'
+                  : 'รอบที่ ๓ (รอบเสี่ยงทาย ๓ คนสุดท้าย)'}
             </span>
           </h3>
           <p className="text-xs text-slate-400 mt-1">
-            * เกณฑ์คะแนนช่องต่างๆ จะนำผลรวมของกรรมการทั้ง ๓ ท่าน มารวมแล้วหาร ๓ เพื่อเป็นคะแนนตัดสินรอบชิงชนะเลิศ
+            {round === 1
+              ? '* รวมคะแนนกรรมการทั้ง ๓ ท่านแล้วหาร ๓ — ๖ คนแรกที่มีคะแนนสูงสุดจะผ่านเข้ารอบตอบคำถามอัตโนมัติ'
+              : round === 2
+                ? '* รวมคะแนนกรรมการทั้ง ๓ ท่านแล้วหาร ๓ — ๓ คนที่มีคะแนนดีที่สุดจะผ่านเข้ารอบเสี่ยงทาย'
+                : '* ผู้เข้ารอบ ๓ ท่านสุดท้ายทำการเสี่ยงทายบนเวทีเพื่อจัดอันดับผู้ชนะเลิศและรองชนะเลิศ'}
           </p>
         </div>
 
@@ -250,7 +258,7 @@ export default function JudgeView({
           <div className="flex flex-wrap items-center gap-2">
             <div className="bg-amber-500/20 border border-amber-500/40 text-amber-200 px-4 py-2 rounded-xl text-sm flex items-center gap-2">
               <AlertCircle className="w-4 h-4" />
-              <span>ยังไม่มีผู้ผ่านเข้ารอบ ๒ (รอแอดมินยืนยันผลการคัดเลือก ๖ คน)</span>
+              <span>กำลังรอผลคะแนนรอบที่ ๑ (ระบบจะคัดเลือก ๖ คนเข้าสู่รอบตอบคำถามอัตโนมัติ)</span>
             </div>
             {isAdmin && (
               <button

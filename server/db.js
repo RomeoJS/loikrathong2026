@@ -453,6 +453,11 @@ async function updateJudge(id, name, title) {
 }
 
 async function getContestants(category, round, judgeId) {
+  if (String(round) === '3' && category) {
+    const summaryR2 = await getAdminSummary(category, 2);
+    return (summaryR2.contestants || []).slice(0, 3);
+  }
+
   if (String(round) === '2' && category) {
     // Check if any contestant is qualified in this category
     let countQualified = 0;
@@ -707,6 +712,25 @@ async function saveScore(judgeId, contestantId, round, scores, total, comment) {
 
 async function getAdminSummary(category, round) {
   const judges = await getJudges(); // 3 judges
+
+  if (Number(round) === 3) {
+    const summaryR2 = await getAdminSummary(category, 2);
+    const top3 = (summaryR2.contestants || []).slice(0, 3).map((c, idx) => ({
+      ...c,
+      prophecy_rank: idx + 1,
+      is_top3_prophecy: true,
+      prophecy_status: 'ผ่านเข้ารอบเสี่ยงทาย'
+    }));
+    return {
+      category,
+      round: 3,
+      judges,
+      contestants: top3,
+      total_contestants: top3.length,
+      top3_prophecy: top3
+    };
+  }
+
   const contestants = await getContestants(category, round);
 
   let scores = [];
@@ -821,14 +845,21 @@ async function getAdminSummary(category, round) {
       rank = i + 1;
     }
     sorted[i].rank = sorted[i].average_score > 0 ? rank : '-';
+    sorted[i].is_top3_prophecy = Number(round) === 2 && i < 3 && sorted[i].average_score > 0;
+    sorted[i].prophecy_status = Number(round) === 2 && i < 3 && sorted[i].average_score > 0
+      ? 'ผ่านเข้ารอบเสี่ยงทาย'
+      : (sorted[i].average_score > 0 ? 'ไม่ผ่านเข้ารอบเสี่ยงทาย' : 'รอลงคะแนน');
   }
+
+  const top3Prophecy = Number(round) === 2 ? sorted.filter(c => c.average_score > 0).slice(0, 3) : [];
 
   return {
     category,
     round,
     judges,
     contestants: sorted,
-    total_contestants: sorted.length
+    total_contestants: sorted.length,
+    top3_prophecy: top3Prophecy
   };
 }
 

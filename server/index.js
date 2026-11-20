@@ -219,6 +219,8 @@ app.post('/api/scores', async (req, res) => {
       total = Math.round(total * 100) / 100;
 
       await db.saveScore(judge_id, contestant_id, round, s, total, comment);
+      // Auto-qualify top 6 without waiting for manual confirmation
+      await db.qualifyRound1(category);
     } else {
       // Round 2
       s.c_r2_walk = Math.min(Math.max(Number(scores.c_r2_walk || 0), 0), 10);
@@ -293,6 +295,22 @@ app.post('/api/admin/seed-demo-scores', async (req, res) => {
     const { round, category } = req.body;
     const targetRound = Number(round) || 1;
     const judges = await db.getJudges(); // 3 judges
+
+    // If seeding Round 3 (Prophecy & Awards), finalize awards for top 3
+    if (targetRound === 3) {
+      const summaryR2 = await db.getAdminSummary(category, 2);
+      const top3 = (summaryR2.contestants || []).slice(0, 3);
+      if (top3.length >= 3) {
+        await db.finalizeRound2(category, {
+          winner_id: top3[0].id,
+          runner_up_1_id: top3[1].id,
+          runner_up_2_id: top3[2].id,
+          costume_id: top3[0].id,
+          popular_id: top3[1].id
+        });
+      }
+      return res.json({ success: true, message: 'Seeded demo prophecy awards successfully' });
+    }
 
     // If seeding Round 2, ensure contestants are qualified
     if (targetRound === 2) {
