@@ -138,6 +138,34 @@ app.get('/api/contestants', async (req, res) => {
   }
 });
 
+app.post('/api/contestants', async (req, res) => {
+  try {
+    const { number, category, prefix, first_name, last_name, school, image_url } = req.body;
+    const contestant = await db.addContestant({
+      number,
+      category,
+      prefix,
+      first_name,
+      last_name,
+      school,
+      image_url
+    });
+    res.json({ success: true, contestant });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/contestants/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.deleteContestant(id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/contestants/upload-photo', upload.single('photo'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });

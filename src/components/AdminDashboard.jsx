@@ -20,9 +20,11 @@ import {
   Save,
   Search,
   Check,
-  Filter
+  Filter,
+  UserPlus
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import AddContestantModal from './AddContestantModal';
 
 export default function AdminDashboard({
   category,
@@ -38,6 +40,7 @@ export default function AdminDashboard({
   // Search & Filter
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMode, setFilterMode] = useState('all'); // 'all' | 'qualified'
+  const [showAddContestantModal, setShowAddContestantModal] = useState(false);
 
   // Admin Direct Score Edit State
   const [editingScore, setEditingScore] = useState(null);
@@ -547,6 +550,15 @@ export default function AdminDashboard({
                 </button>
               </div>
             )}
+
+            <button
+              onClick={() => setShowAddContestantModal(true)}
+              className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-bold text-xs sm:text-sm shadow-lg shadow-amber-500/20 flex items-center gap-1.5 transition-all hover:scale-[1.02]"
+              title="เพิ่มผู้เข้าประกวดใหม่เข้าสู่ระบบ"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>+ เพิ่มผู้เข้าประกวด</span>
+            </button>
 
             <button
               onClick={handleSeedDemo}
@@ -2181,6 +2193,17 @@ export default function AdminDashboard({
           </div>
         </div>
       )}
+
+      {/* ================= ADD CONTESTANT MODAL ================= */}
+      <AddContestantModal
+        isOpen={showAddContestantModal}
+        onClose={() => setShowAddContestantModal(false)}
+        defaultCategory={category}
+        onSuccess={async () => {
+          await fetchSummary();
+          if (onDataChanged) onDataChanged();
+        }}
+      />
     </div>
   );
 }

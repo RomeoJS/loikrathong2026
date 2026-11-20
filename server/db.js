@@ -559,6 +559,84 @@ async function getContestants(category, round, judgeId) {
   return contestants;
 }
 
+async function addContestant({ number, category, prefix, first_name, last_name, school, image_url }) {
+  const cat = (category || 'WOMEN').toUpperCase();
+  let num = parseInt(number, 10);
+
+  if (isNaN(num) || num <= 0) {
+    if (dbType === 'mysql') {
+      const [rows] = await mysqlPool.query('SELECT COALESCE(MAX(number), 0) + 1 AS nextNum FROM contestants WHERE category = ?', [cat]);
+      num = rows[0]?.nextNum || 1;
+    } else {
+      const row = sqliteDb.prepare('SELECT COALESCE(MAX(number), 0) + 1 AS nextNum FROM contestants WHERE category = ?').get(cat);
+      num = row?.nextNum || 1;
+    }
+  } else {
+    // Check duplicate
+    if (dbType === 'mysql') {
+      const [existing] = await mysqlPool.query('SELECT id FROM contestants WHERE category = ? AND number = ?', [cat, num]);
+      if (existing.length > 0) {
+        throw new Error(`หมายเลข ${num} มีอยู่ในระบบการประกวด ${cat === 'WOMEN' ? 'นางนพมาศ' : 'เทพบุตร'} แล้ว`);
+      }
+    } else {
+      const existing = sqliteDb.prepare('SELECT id FROM contestants WHERE category = ? AND number = ?').get(cat, num);
+      if (existing) {
+        throw new Error(`หมายเลข ${num} มีอยู่ในระบบการประกวด ${cat === 'WOMEN' ? 'นางนพมาศ' : 'เทพบุตร'} แล้ว`);
+      }
+    }
+  }
+
+  const pfx = (prefix || (cat === 'WOMEN' ? 'นางสาว' : 'นาย')).trim();
+  const fName = (first_name || '').trim();
+  const lName = (last_name || '').trim();
+  const sch = (school || '').trim();
+  const img = (image_url || '').trim() || '/images/placeholder.svg';
+
+  if (!fName || !lName) {
+    throw new Error('กรุณากรอกชื่อและนามสกุลของผู้เข้าประกวด');
+  }
+
+  let newId;
+  if (dbType === 'mysql') {
+    const [result] = await mysqlPool.query(
+      `INSERT INTO contestants (number, category, prefix, first_name, last_name, school, image_url, round1_qualified)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
+      [num, cat, pfx, fName, lName, sch, img]
+    );
+    newId = result.insertId;
+  } else {
+    const info = sqliteDb.prepare(
+      `INSERT INTO contestants (number, category, prefix, first_name, last_name, school, image_url, round1_qualified)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0)`
+    ).run(num, cat, pfx, fName, lName, sch, img);
+    newId = info.lastInsertRowid;
+  }
+
+  return {
+    id: newId,
+    number: num,
+    category: cat,
+    prefix: pfx,
+    first_name: fName,
+    last_name: lName,
+    school: sch,
+    image_url: img,
+    round1_qualified: 0
+  };
+}
+
+async function deleteContestant(id) {
+  const cId = Number(id);
+  if (dbType === 'mysql') {
+    await mysqlPool.query('DELETE FROM scores WHERE contestant_id = ?', [cId]);
+    await mysqlPool.query('DELETE FROM contestants WHERE id = ?', [cId]);
+  } else {
+    sqliteDb.prepare('DELETE FROM scores WHERE contestant_id = ?').run(cId);
+    sqliteDb.prepare('DELETE FROM contestants WHERE id = ?').run(cId);
+  }
+  return true;
+}
+
 async function updateContestant(id, fields) {
   const updates = [];
   const params = [];
@@ -1019,6 +1097,8 @@ module.exports = {
   getJudges,
   updateJudge,
   getContestants,
+  addContestant,
+  deleteContestant,
   updateContestant,
   getScore,
   saveScore,

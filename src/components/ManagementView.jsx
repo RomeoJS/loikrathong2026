@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Edit2, Upload, User, Check, X, Shield, RefreshCw, KeyRound, Lock } from 'lucide-react';
+import { Settings, Edit2, Upload, User, Check, X, Shield, RefreshCw, KeyRound, Lock, UserPlus, Trash2 } from 'lucide-react';
+import AddContestantModal from './AddContestantModal';
 
 export default function ManagementView({
   category,
@@ -15,6 +16,7 @@ export default function ManagementView({
   const [editingUser, setEditingUser] = useState(null);
   const [newPassword, setNewPassword] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const activeJudges = judges.slice(0, 3);
 
@@ -96,6 +98,24 @@ export default function ManagementView({
     } catch (err) {
       console.error(err);
       alert('บันทึกล้มเหลว');
+    }
+  };
+
+  const handleDeleteContestant = async (c) => {
+    if (!window.confirm(`⚠️ คุณแน่ใจหรือไม่ที่จะลบผู้เข้าประกวด หมายเลข #${c.number} ${c.prefix}${c.first_name} ${c.last_name}?\n\nหมายเหตุ: หากลบแล้ว ข้อมูลคะแนนทั้งหมดของผู้เข้าประกวดรายนี้จะถูกลบไปด้วย`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/contestants/${c.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        await fetchContestants();
+        if (onDataChanged) onDataChanged();
+      } else {
+        alert('ไม่สามารถลบข้อมูลได้');
+      }
+    } catch (err) {
+      console.error('Delete error:', err);
+      alert('เกิดข้อผิดพลาดในการลบข้อมูล');
     }
   };
 
@@ -247,22 +267,32 @@ export default function ManagementView({
 
       {/* Contestants Management */}
       <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-6 shadow-xl">
-        <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
           <div>
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <User className="w-5 h-5 text-amber-400" />
               <span>จัดการข้อมูลผู้เข้าประกวด ({category === 'WOMEN' ? 'นางนพมาศ' : 'เทพบุตร'})</span>
             </h2>
             <p className="text-xs text-slate-400">
-              แก้ไขชื่อ-สกุล, สถาบันการศึกษา หรือเปลี่ยน/อัปโหลดรูปภาพผู้เข้าประกวด
+              เพิ่มผู้เข้าประกวดใหม่, แก้ไขข้อมูล, หรือเปลี่ยน/อัปโหลดรูปภาพผู้เข้าประกวด
             </p>
           </div>
-          <button
-            onClick={fetchContestants}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.02]"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>+ เพิ่มผู้เข้าประกวด</span>
+            </button>
+            <button
+              onClick={fetchContestants}
+              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300"
+              title="รีเฟรชข้อมูล"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
@@ -304,13 +334,22 @@ export default function ManagementView({
                   <span className="font-mono text-xs font-bold text-amber-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
                     #{String(c.number).padStart(2, '0')}
                   </span>
-                  <button
-                    onClick={() => setEditingContestant({ ...c })}
-                    className="p-1 text-slate-400 hover:text-amber-400 hover:bg-slate-900 rounded"
-                    title="แก้ไขข้อมูล"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setEditingContestant({ ...c })}
+                      className="p-1 text-slate-400 hover:text-amber-400 hover:bg-slate-900 rounded transition-colors"
+                      title="แก้ไขข้อมูล"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteContestant(c)}
+                      className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-900 rounded transition-colors"
+                      title="ลบผู้เข้าประกวด"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
                 <div className="font-semibold text-white text-sm truncate mt-1">
                   {c.prefix}{c.first_name} {c.last_name}
@@ -485,6 +524,17 @@ export default function ManagementView({
           </div>
         </div>
       )}
+
+      {/* ================= ADD CONTESTANT MODAL ================= */}
+      <AddContestantModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        defaultCategory={category}
+        onSuccess={async () => {
+          await fetchContestants();
+          if (onDataChanged) onDataChanged();
+        }}
+      />
     </div>
   );
 }
