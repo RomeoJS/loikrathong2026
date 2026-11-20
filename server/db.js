@@ -453,6 +453,44 @@ async function updateJudge(id, name, title) {
 }
 
 async function getContestants(category, round, judgeId) {
+  if (String(round) === '2' && category) {
+    // Check if any contestant is qualified in this category
+    let countQualified = 0;
+    if (dbType === 'mysql') {
+      const [rows] = await mysqlPool.query(
+        'SELECT COUNT(*) as count FROM contestants WHERE category = ? AND round1_qualified = 1',
+        [category]
+      );
+      countQualified = rows[0]?.count || 0;
+    } else {
+      const row = sqliteDb.prepare(
+        'SELECT COUNT(*) as count FROM contestants WHERE category = ? AND round1_qualified = 1'
+      ).get(category);
+      countQualified = row?.count || 0;
+    }
+
+    // If no one is qualified yet, check if Round 1 has scores and auto-qualify top 6!
+    if (countQualified === 0) {
+      let scoreCount = 0;
+      if (dbType === 'mysql') {
+        const [sRows] = await mysqlPool.query(
+          'SELECT COUNT(*) as count FROM scores s JOIN contestants c ON s.contestant_id = c.id WHERE c.category = ? AND s.round = 1',
+          [category]
+        );
+        scoreCount = sRows[0]?.count || 0;
+      } else {
+        const sRow = sqliteDb.prepare(
+          'SELECT COUNT(*) as count FROM scores s JOIN contestants c ON s.contestant_id = c.id WHERE c.category = ? AND s.round = 1'
+        ).get(category);
+        scoreCount = sRow?.count || 0;
+      }
+
+      if (scoreCount > 0) {
+        await qualifyRound1(category);
+      }
+    }
+  }
+
   let contestants = [];
   if (dbType === 'mysql') {
     let sql = 'SELECT * FROM contestants WHERE 1=1';
@@ -803,7 +841,7 @@ async function qualifyRound1(category, contestantIds) {
         FROM contestants c
         LEFT JOIN scores s ON c.id = s.contestant_id AND s.round = 1 AND s.judge_id <= 3
         WHERE c.category = ?
-        GROUP BY c.id
+        GROUP BY c.id, c.number
         ORDER BY total DESC, c.number ASC
         LIMIT 6
       `, [category]);
@@ -814,7 +852,7 @@ async function qualifyRound1(category, contestantIds) {
         FROM contestants c
         LEFT JOIN scores s ON c.id = s.contestant_id AND s.round = 1 AND s.judge_id <= 3
         WHERE c.category = ?
-        GROUP BY c.id
+        GROUP BY c.id, c.number
         ORDER BY total DESC, c.number ASC
         LIMIT 6
       `).all(category);
@@ -877,11 +915,23 @@ async function resetScores(round, category) {
           await mysqlPool.query(`DELETE FROM scores WHERE contestant_id IN (${placeholders})`, cIds);
         }
       }
+      if (Number(round) === 1 || !round) {
+        await mysqlPool.query('UPDATE contestants SET round1_qualified = 0 WHERE category = ?', [category]);
+      }
+      if (Number(round) === 2 || !round) {
+        await mysqlPool.query('UPDATE contestants SET round2_rank = NULL, award_costume = 0, award_popular = 0 WHERE category = ?', [category]);
+      }
     } else {
       if (round) {
         await mysqlPool.query('DELETE FROM scores WHERE round = ?', [round]);
       } else {
         await mysqlPool.query('DELETE FROM scores');
+      }
+      if (Number(round) === 1 || !round) {
+        await mysqlPool.query('UPDATE contestants SET round1_qualified = 0');
+      }
+      if (Number(round) === 2 || !round) {
+        await mysqlPool.query('UPDATE contestants SET round2_rank = NULL, award_costume = 0, award_popular = 0');
       }
     }
   } else {
@@ -896,11 +946,23 @@ async function resetScores(round, category) {
           sqliteDb.prepare(`DELETE FROM scores WHERE contestant_id IN (${placeholders})`).run(...cIds);
         }
       }
+      if (Number(round) === 1 || !round) {
+        sqliteDb.prepare('UPDATE contestants SET round1_qualified = 0 WHERE category = ?').run(category);
+      }
+      if (Number(round) === 2 || !round) {
+        sqliteDb.prepare('UPDATE contestants SET round2_rank = NULL, award_costume = 0, award_popular = 0 WHERE category = ?').run(category);
+      }
     } else {
       if (round) {
         sqliteDb.prepare('DELETE FROM scores WHERE round = ?').run(round);
       } else {
         sqliteDb.prepare('DELETE FROM scores').run();
+      }
+      if (Number(round) === 1 || !round) {
+        sqliteDb.prepare('UPDATE contestants SET round1_qualified = 0').run();
+      }
+      if (Number(round) === 2 || !round) {
+        sqliteDb.prepare('UPDATE contestants SET round2_rank = NULL, award_costume = 0, award_popular = 0').run();
       }
     }
   }

@@ -46,6 +46,7 @@ export default function AdminDashboard({
   // Qualify & Award Modals
   const [showQualifyModal, setShowQualifyModal] = useState(false);
   const [selectedQualifyIds, setSelectedQualifyIds] = useState([]);
+  const [qualifyCandidates, setQualifyCandidates] = useState([]);
   const [showAwardModal, setShowAwardModal] = useState(false);
   const [awardsForm, setAwardsForm] = useState({
     winner_id: '',
@@ -253,6 +254,50 @@ export default function AdminDashboard({
     return Math.round(sum * 100) / 100;
   };
 
+  const handleOpenQualifyModal = async () => {
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/admin/summary?category=${category}&round=1`);
+      const data = await res.json();
+      if (data && data.contestants) {
+        setQualifyCandidates(data.contestants);
+        const qualified = data.contestants.filter(c => c.round1_qualified === 1).map(c => c.id);
+        if (qualified.length > 0) {
+          setSelectedQualifyIds(qualified);
+        } else {
+          setSelectedQualifyIds(data.contestants.slice(0, 6).map(c => c.id));
+        }
+      }
+      setShowQualifyModal(true);
+    } catch (err) {
+      console.error('Failed to load qualify modal candidates:', err);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleAutoQualifyTop6 = async () => {
+    setActionLoading(true);
+    try {
+      const res = await fetch('/api/admin/qualify-round-1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category })
+      });
+      const result = await res.json();
+      if (result.success) {
+        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+        await fetchSummary();
+        if (onDataChanged) onDataChanged();
+      }
+    } catch (err) {
+      console.error(err);
+      alert('เกิดข้อผิดพลาดในการดึงผู้เข้ารอบ');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleConfirmQualify = async () => {
     setActionLoading(true);
     try {
@@ -268,6 +313,13 @@ export default function AdminDashboard({
       if (result.success) {
         setShowQualifyModal(false);
         confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+        // Automatically switch view to Round 2
+        setRound(2);
+        fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: 'active_round', value: 2 })
+        }).catch(console.error);
         await fetchSummary();
         if (onDataChanged) onDataChanged();
       }
@@ -410,20 +462,33 @@ export default function AdminDashboard({
           <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
             {round === 1 ? (
               <button
-                onClick={() => setShowQualifyModal(true)}
+                onClick={handleOpenQualifyModal}
+                disabled={actionLoading}
                 className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-bold text-xs sm:text-sm shadow-xl shadow-amber-500/20 flex items-center gap-2 transition-all hover:scale-[1.02]"
               >
                 <Crown className="w-4 h-4" />
                 <span>คัดเลือก ๖ คนเข้ารอบ ๒</span>
               </button>
             ) : (
-              <button
-                onClick={() => setShowAwardModal(true)}
-                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-bold text-xs sm:text-sm shadow-xl shadow-amber-500/20 flex items-center gap-2 transition-all hover:scale-[1.02]"
-              >
-                <Crown className="w-4 h-4" />
-                <span>สรุปผลรางวัล & ชนะเลิศ</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleOpenQualifyModal}
+                  disabled={actionLoading}
+                  className="px-3.5 py-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+                  title="ดูหรือปรับเปลี่ยนรายชื่อ ๖ คนที่ผ่านเข้ารอบ ๒"
+                >
+                  <Crown className="w-3.5 h-3.5" />
+                  <span>ปรับเปลี่ยน ๖ คนเข้ารอบ ๒</span>
+                </button>
+                <button
+                  onClick={() => setShowAwardModal(true)}
+                  disabled={actionLoading}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-bold text-xs sm:text-sm shadow-xl shadow-amber-500/20 flex items-center gap-2 transition-all hover:scale-[1.02]"
+                >
+                  <Trophy className="w-4 h-4" />
+                  <span>สรุปผลรางวัล & ชนะเลิศ</span>
+                </button>
+              </div>
             )}
 
             <button
@@ -555,6 +620,38 @@ export default function AdminDashboard({
           </div>
         </div>
       </div>
+
+      {/* Round 2 Empty State Banner */}
+      {round === 2 && contestants.length === 0 && (
+        <div className="bg-slate-900/90 border border-amber-500/40 rounded-3xl p-8 text-center space-y-4 shadow-2xl">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400 shadow-lg">
+            <Crown className="w-8 h-8" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-white">ยังไม่มีรายชื่อผู้ผ่านเข้ารอบที่ ๒</h3>
+            <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-md mx-auto">
+              ท่านสามารถดึง ๖ อันดับแรกที่มีคะแนนสูงสุดจากรอบที่ ๑ เข้าสู่รอบที่ ๒ ได้ทันที หรือเลือกผู้ผ่านเข้ารอบด้วยตนเอง
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <button
+              onClick={handleAutoQualifyTop6}
+              disabled={actionLoading}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-bold text-xs sm:text-sm shadow-xl shadow-amber-500/20 flex items-center gap-2 transition-all hover:scale-[1.02]"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>ดึง ๖ อันดับแรกจากคะแนนรอบที่ ๑ อัตโนมัติ</span>
+            </button>
+            <button
+              onClick={handleOpenQualifyModal}
+              disabled={actionLoading}
+              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs sm:text-sm font-semibold transition-colors"
+            >
+              เลือกรายชื่อผู้เข้ารอบด้วยตนเอง
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ================= Main Table: Scores Matrix & Controls ================= */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
@@ -1638,7 +1735,7 @@ export default function AdminDashboard({
             </div>
 
             <div className="py-4 space-y-2 max-h-[55vh] overflow-y-auto">
-              {contestants.map((c) => {
+              {(qualifyCandidates.length > 0 ? qualifyCandidates : contestants).map((c) => {
                 const isSelected = selectedQualifyIds.includes(c.id);
                 return (
                   <label

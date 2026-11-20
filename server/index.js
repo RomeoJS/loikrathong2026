@@ -293,6 +293,15 @@ app.post('/api/admin/seed-demo-scores', async (req, res) => {
     const { round, category } = req.body;
     const targetRound = Number(round) || 1;
     const judges = await db.getJudges(); // 3 judges
+
+    // If seeding Round 2, ensure contestants are qualified
+    if (targetRound === 2) {
+      let r2Contestants = await db.getContestants(category, 2);
+      if (!r2Contestants || r2Contestants.length === 0) {
+        await db.qualifyRound1(category);
+      }
+    }
+
     const contestants = await db.getContestants(category, targetRound === 2 ? 2 : undefined);
 
     for (const c of contestants) {
@@ -341,6 +350,11 @@ app.post('/api/admin/seed-demo-scores', async (req, res) => {
           }, total, 'คะแนนจำลองทดสอบรอบสอง');
         }
       }
+    }
+
+    // Automatically qualify top 6 into Round 2 after seeding Round 1
+    if (targetRound === 1) {
+      await db.qualifyRound1(category);
     }
 
     res.json({ success: true, message: 'Seeded demo scores for 3 judges successfully' });

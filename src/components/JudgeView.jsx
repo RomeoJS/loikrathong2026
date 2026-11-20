@@ -247,9 +247,35 @@ export default function JudgeView({
         </div>
 
         {round === 2 && contestants.length === 0 && (
-          <div className="bg-amber-500/20 border border-amber-500/40 text-amber-200 px-4 py-2 rounded-xl text-sm flex items-center gap-2">
-            <AlertCircle className="w-4 h-4" />
-            <span>ยังไม่มีผู้ผ่านเข้ารอบ ๒ (รอแอดมินยืนยันผลการคัดเลือก ๖ คน)</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="bg-amber-500/20 border border-amber-500/40 text-amber-200 px-4 py-2 rounded-xl text-sm flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" />
+              <span>ยังไม่มีผู้ผ่านเข้ารอบ ๒ (รอแอดมินยืนยันผลการคัดเลือก ๖ คน)</span>
+            </div>
+            {isAdmin && (
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/admin/qualify-round-1', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ category })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                      await fetchContestants();
+                      if (onScoreUpdated) onScoreUpdated();
+                    }
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }}
+                className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition-all flex items-center gap-1.5"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>ดึง ๖ คนแรกจากรอบ ๑ ทันที</span>
+              </button>
+            )}
           </div>
         )}
       </div>
