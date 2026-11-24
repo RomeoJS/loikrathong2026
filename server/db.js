@@ -40,6 +40,7 @@ const initialWomenList = [
   { num: 13, prefix: 'น.ส.', first: 'มณีรินทร์', last: 'ไชยปัญญา', school: 'ม.เทคโนโลยีราชมงคลพระนคร', img: '/images/women/MS13.jpeg' },
   { num: 14, prefix: 'น.ส.', first: 'กัญญาณัฐ', last: 'เจริญชวลิตกุล', school: 'มหาวิทยาลัยศรีนครินทรวิโรฒ', img: '/images/women/MS14.jpeg' },
   { num: 15, prefix: 'น.ส.', first: 'ณัชฌารีย์', last: 'สิริไสย์', school: 'ม.เทคโนโลยีราชมงคลพระนคร', img: '/images/women/MS15.jpeg' },
+  { num: 16, prefix: 'น.ส.', first: 'มนต์ณภัทร์', last: 'แก้วสีดวง', school: 'มหาวิทยาลัยเกษตรศาสตร์', img: '/images/women/MS16.jpg' },
 ];
 
 const initialMenList = [
@@ -206,21 +207,30 @@ async function setupSchema() {
       `, [u.username, u.password, u.name, u.role, u.judge_id]);
     }
 
-    // Seed contestants
-    const [contestants] = await mysqlPool.query('SELECT COUNT(*) as count FROM contestants');
-    if (contestants[0].count === 0) {
-      for (const w of initialWomenList) {
-        await mysqlPool.query(
-          'INSERT INTO contestants (number, category, prefix, first_name, last_name, school, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [w.num, 'WOMEN', w.prefix, w.first, w.last, w.school, w.img]
-        );
-      }
-      for (const m of initialMenList) {
-        await mysqlPool.query(
-          'INSERT INTO contestants (number, category, prefix, first_name, last_name, school, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [m.num, 'MEN', m.prefix, m.first, m.last, m.school, m.img]
-        );
-      }
+    // Seed contestants (Ensure all initial contestants exist)
+    for (const w of initialWomenList) {
+      await mysqlPool.query(`
+        INSERT INTO contestants (number, category, prefix, first_name, last_name, school, image_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE 
+          prefix = VALUES(prefix), 
+          first_name = VALUES(first_name), 
+          last_name = VALUES(last_name), 
+          school = VALUES(school), 
+          image_url = VALUES(image_url)
+      `, [w.num, 'WOMEN', w.prefix, w.first, w.last, w.school, w.img]);
+    }
+    for (const m of initialMenList) {
+      await mysqlPool.query(`
+        INSERT INTO contestants (number, category, prefix, first_name, last_name, school, image_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE 
+          prefix = VALUES(prefix), 
+          first_name = VALUES(first_name), 
+          last_name = VALUES(last_name), 
+          school = VALUES(school), 
+          image_url = VALUES(image_url)
+      `, [m.num, 'MEN', m.prefix, m.first, m.last, m.school, m.img]);
     }
 
     // Seed settings
@@ -323,18 +333,22 @@ async function setupSchema() {
       insertUser.run(u.username, u.password, u.name, u.role, u.judge_id);
     }
 
-    // Seed contestants
-    const countContestants = sqliteDb.prepare('SELECT COUNT(*) as count FROM contestants').get().count;
-    if (countContestants === 0) {
-      const insertC = sqliteDb.prepare(
-        'INSERT INTO contestants (number, category, prefix, first_name, last_name, school, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)'
-      );
-      for (const w of initialWomenList) {
-        insertC.run(w.num, 'WOMEN', w.prefix, w.first, w.last, w.school, w.img);
-      }
-      for (const m of initialMenList) {
-        insertC.run(m.num, 'MEN', m.prefix, m.first, m.last, m.school, m.img);
-      }
+    // Seed contestants (Ensure all initial contestants exist)
+    const insertC = sqliteDb.prepare(`
+      INSERT INTO contestants (number, category, prefix, first_name, last_name, school, image_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(category, number) DO UPDATE SET
+        prefix = excluded.prefix,
+        first_name = excluded.first_name,
+        last_name = excluded.last_name,
+        school = excluded.school,
+        image_url = excluded.image_url
+    `);
+    for (const w of initialWomenList) {
+      insertC.run(w.num, 'WOMEN', w.prefix, w.first, w.last, w.school, w.img);
+    }
+    for (const m of initialMenList) {
+      insertC.run(m.num, 'MEN', m.prefix, m.first, m.last, m.school, m.img);
     }
 
     // Seed settings
